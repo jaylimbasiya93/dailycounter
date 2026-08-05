@@ -110,11 +110,13 @@ export const DashboardView: React.FC = () => {
             </div>
             <div>
               <span className="text-[11px] font-medium text-slate-400 dark:text-zinc-500 block">
-                Value Rate
+                Lifetime Value
               </span>
-              <span className="text-base font-bold text-slate-800 dark:text-zinc-200">
-                ₹{settings.valuePerMomentum}/cnt
-              </span>
+              <RollingNumber
+                value={lifetimeCount * settings.valuePerMomentum}
+                prefix="₹"
+                className="text-base font-bold text-emerald-600 dark:text-emerald-400"
+              />
             </div>
           </div>
         </div>
