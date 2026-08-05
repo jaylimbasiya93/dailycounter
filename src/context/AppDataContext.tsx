@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { MomentumEntry, AppSettings, TabType, DayLog, AnalyticsSummary } from '../types';
 import { DEFAULT_SETTINGS, generateSeedEntries } from '../utils/mockData';
+import { getLocalDateStr } from '../utils/date';
 import { soundEffects } from '../utils/audio';
 import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 import confetti from 'canvas-confetti';
@@ -109,9 +110,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [settings.theme]);
 
-  // Today Date string helper (YYYY-MM-DD)
-  const todayDateStr = useMemo(() => {
-    return new Date().toISOString().split('T')[0];
+  // Dynamic Today Date string (YYYY-MM-DD in local timezone)
+  const [todayDateStr, setTodayDateStr] = useState<string>(() => getLocalDateStr());
+
+  // Midnight (00:00:00) Rollover Detector & Tab Focus Refresh
+  useEffect(() => {
+    const checkDateChange = () => {
+      const currentLocal = getLocalDateStr();
+      setTodayDateStr((prev) => (prev !== currentLocal ? currentLocal : prev));
+    };
+
+    const interval = setInterval(checkDateChange, 5000);
+    window.addEventListener('focus', checkDateChange);
+    document.addEventListener('visibilitychange', checkDateChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkDateChange);
+      document.removeEventListener('visibilitychange', checkDateChange);
+    };
   }, []);
 
   // Group entries into day logs sorted newest date first
@@ -165,18 +182,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Calculate current active streak backwards from today or yesterday
     let checkDate = new Date(today);
-    let checkStr = checkDate.toISOString().split('T')[0];
+    let checkStr = getLocalDateStr(checkDate);
     
     // If today hasn't hit goal yet, check yesterday to continue streak
     if ((countMap.get(checkStr) || 0) < 1) {
       checkDate.setDate(checkDate.getDate() - 1);
-      checkStr = checkDate.toISOString().split('T')[0];
+      checkStr = getLocalDateStr(checkDate);
     }
 
     while (countMap.has(checkStr) && (countMap.get(checkStr) || 0) > 0) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
-      checkStr = checkDate.toISOString().split('T')[0];
+      checkStr = getLocalDateStr(checkDate);
     }
 
     // Calculate longest historical streak

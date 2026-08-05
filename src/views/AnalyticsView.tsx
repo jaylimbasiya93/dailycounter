@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppDataContext';
+import { getLocalDateStr } from '../utils/date';
 import {
   ResponsiveContainer,
   BarChart,
@@ -96,7 +97,7 @@ export const AnalyticsView: React.FC = () => {
     for (let i = 111; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const dStr = d.toISOString().split('T')[0];
+      const dStr = getLocalDateStr(d);
       const count = logMap.get(dStr) || 0;
 
       let level: 0 | 1 | 2 | 3 | 4 = 0;

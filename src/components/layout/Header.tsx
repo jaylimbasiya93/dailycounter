@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppDataContext';
+import { getLocalDateStr } from '../../utils/date';
 import { Sun, Moon, Flame, Download, History, Target, Plus, Minus, X, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -200,7 +201,7 @@ export const Header: React.FC = () => {
                   <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-zinc-800/60 pr-1">
                     {entries.slice(0, 20).map((entry) => {
                       const entryDate = new Date(entry.timestamp);
-                      const isToday = entry.date === new Date().toISOString().split('T')[0];
+                      const isToday = entry.date === getLocalDateStr();
                       const dateDisplay = isToday
                         ? 'Today'
                         : entryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
