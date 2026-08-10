@@ -29,10 +29,15 @@ export const RollingNumber: React.FC<RollingNumberProps> = ({
     return () => unsubscribe();
   }, [animatedValue]);
 
+  const isNegative = displayValue < 0;
+  const formattedNum = Math.abs(displayValue).toLocaleString('en-IN');
+  const formattedText = isNegative
+    ? (prefix ? `-${prefix}${formattedNum}` : `-${formattedNum}`)
+    : (prefix ? `${prefix}${formattedNum}` : formattedNum);
+
   return (
     <span className={`inline-flex items-baseline font-bold tracking-tight tabular-nums ${className}`}>
-      {prefix && <span className="mr-0.5">{prefix}</span>}
-      <motion.span>{displayValue.toLocaleString('en-IN')}</motion.span>
+      <motion.span>{formattedText}</motion.span>
       {suffix && <span className="ml-1 text-sm font-medium">{suffix}</span>}
     </span>
   );

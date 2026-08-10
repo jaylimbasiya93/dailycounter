@@ -92,7 +92,11 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Financial Value in Rupees (₹) */}
-          <div className="mt-1 flex items-center space-x-1 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+          <div className={`mt-1 flex items-center space-x-1 px-3 py-1 rounded-full border font-bold text-sm ${
+            todayValue < 0
+              ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+          }`}>
             <span>Today's Value:</span>
             <RollingNumber value={todayValue} prefix="₹" />
           </div>
@@ -244,12 +248,7 @@ export const DashboardView: React.FC = () => {
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.88 }}
             onClick={handleMinus}
-            disabled={todayCount <= 0}
-            className={`pointer-events-auto relative w-20 h-20 rounded-full flex items-center justify-center shadow-floating transition-all border outline-none select-none ${
-              todayCount <= 0
-                ? 'bg-slate-200/80 dark:bg-zinc-800/80 text-slate-400 dark:text-zinc-600 border-slate-300/40 dark:border-zinc-700/40 cursor-not-allowed opacity-60'
-                : 'bg-white dark:bg-zinc-900 text-slate-800 dark:text-white border-slate-200/90 dark:border-zinc-800 active:bg-slate-100'
-            }`}
+            className="pointer-events-auto relative w-20 h-20 rounded-full bg-white dark:bg-zinc-900 text-slate-800 dark:text-white flex items-center justify-center shadow-floating transition-all border border-slate-200/90 dark:border-zinc-800 active:bg-slate-100 outline-none select-none"
             aria-label="Decrement daily momentum"
           >
             {rippleMinus && (

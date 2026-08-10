@@ -145,7 +145,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const totalCount = dayEntries.reduce((acc, cur) => acc + cur.count, 0);
       return {
         date,
-        totalCount: Math.max(0, totalCount),
+        totalCount,
         entries: dayEntries.sort((a, b) => b.timestamp - a.timestamp),
       };
     });
@@ -315,8 +315,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Decrement Momentum (-1)
   const decrementMomentum = (amount = 1) => {
-    if (todayCount <= 0) return;
-
     const now = Date.now();
     const newEntry: MomentumEntry = {
       id: `entry-dec-${now}`,
