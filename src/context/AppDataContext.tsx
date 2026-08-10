@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
-import type { MomentumEntry, AppSettings, TabType, DayLog, AnalyticsSummary } from '../types';
+import type { MomentumEntry, AppSettings, TabType, DayLog, AnalyticsSummary, HourlyStat, WeekdayStat } from '../types';
 import { DEFAULT_SETTINGS, generateSeedEntries } from '../utils/mockData';
 import { getLocalDateStr } from '../utils/date';
 import { soundEffects } from '../utils/audio';
@@ -234,6 +234,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Advanced Analytics
   const analytics: AnalyticsSummary = useMemo(() => {
+    const emptyHourly: HourlyStat[] = Array.from({ length: 24 }, (_, h) => {
+      const displayHour = h % 12 === 0 ? 12 : h % 12;
+      const period = h >= 12 ? 'PM' : 'AM';
+      return {
+        hour: h,
+        timeLabel: `${displayHour} ${period}`,
+        totalCount: 0,
+        avgCount: 0,
+        entryCount: 0,
+      };
+    });
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const emptyWeekdays: WeekdayStat[] = dayNames.map((d) => ({
+      dayName: d,
+      totalCount: 0,
+      avgCount: 0,
+      daysCount: 0,
+    }));
+
     if (dayLogs.length === 0) {
       return {
         bestDay: { date: todayDateStr, count: 0 },
@@ -243,6 +263,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         trendPercentage: 0,
         projected10DayTotal: 0,
         projectedMonthlyTotal: 0,
+        totalDaysLogged: 0,
+        daysGoalAchieved: 0,
+        peakHour: { hour: 12, timeLabel: '12 PM', avgCount: 0, totalCount: 0 },
+        lowestHour: { hour: 0, timeLabel: '12 AM', avgCount: 0, totalCount: 0 },
+        bestWeekday: { dayName: 'Sun', avgCount: 0 },
+        weekdayStats: emptyWeekdays,
+        allTimeHourlyStats: emptyHourly,
+        positiveEntriesCount: 0,
+        negativeEntriesCount: 0,
+        positivePercentage: 100,
+        totalEntriesCount: 0,
+        weekdayAvg: 0,
+        weekendAvg: 0,
       };
     }
 
@@ -254,12 +287,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     dayLogs.forEach((l) => {
       sum += l.totalCount;
       if (l.totalCount > best.count) best = { date: l.date, count: l.totalCount };
-      if (l.totalCount < worst.count && l.totalCount > 0) worst = { date: l.date, count: l.totalCount };
+      if (l.totalCount < worst.count) worst = { date: l.date, count: l.totalCount };
       if (l.totalCount >= settings.dailyGoal) daysMeetingGoal++;
     });
 
-    const avg = sum / dayLogs.length;
-    const consistency = Math.round((daysMeetingGoal / dayLogs.length) * 100);
+    const totalDaysLogged = dayLogs.length;
+    const avg = sum / totalDaysLogged;
+    const consistency = Math.round((daysMeetingGoal / totalDaysLogged) * 100);
 
     // Trend %: compare recent 7 days vs previous 7 days
     const recent7 = dayLogs.slice(0, 7).reduce((a, b) => a + b.totalCount, 0);
@@ -269,6 +303,92 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const projected10Day = Math.round(avg * 10);
     const projectedMonthly = Math.round(avg * 30);
 
+    // 1. All-time Hourly Distribution & Peak Hour (considering entire historical dataset)
+    const hourlyMap: Record<number, { totalCount: number; entryCount: number }> = {};
+    for (let h = 0; h < 24; h++) {
+      hourlyMap[h] = { totalCount: 0, entryCount: 0 };
+    }
+
+    let positiveEntriesCount = 0;
+    let negativeEntriesCount = 0;
+    let totalEntriesCount = 0;
+
+    entries.forEach((e) => {
+      totalEntriesCount++;
+      if (e.count >= 0) positiveEntriesCount++;
+      else negativeEntriesCount++;
+
+      const hour = new Date(e.timestamp).getHours();
+      if (hour >= 0 && hour < 24) {
+        hourlyMap[hour].totalCount += e.count;
+        hourlyMap[hour].entryCount += 1;
+      }
+    });
+
+    const allTimeHourlyStats: HourlyStat[] = emptyHourly.map((item) => {
+      const hData = hourlyMap[item.hour];
+      const avgVal = totalDaysLogged > 0 ? hData.totalCount / totalDaysLogged : 0;
+      return {
+        ...item,
+        totalCount: hData.totalCount,
+        avgCount: Math.round(avgVal * 10) / 10,
+        entryCount: hData.entryCount,
+      };
+    });
+
+    // Peak & Lowest Hour calculations
+    let peakH = allTimeHourlyStats[0];
+    let lowestH = allTimeHourlyStats[0];
+
+    allTimeHourlyStats.forEach((hStat) => {
+      if (hStat.avgCount > peakH.avgCount) peakH = hStat;
+      if (hStat.avgCount < lowestH.avgCount) lowestH = hStat;
+    });
+
+    // 2. Day of Week Breakdown (Sun..Sat)
+    const weekdayTotals: Record<number, { totalCount: number; daysCount: number }> = {};
+    for (let d = 0; d < 7; d++) {
+      weekdayTotals[d] = { totalCount: 0, daysCount: 0 };
+    }
+
+    dayLogs.forEach((log) => {
+      const parts = log.date.split('-');
+      if (parts.length === 3) {
+        const dObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const dayIdx = dObj.getDay();
+        weekdayTotals[dayIdx].totalCount += log.totalCount;
+        weekdayTotals[dayIdx].daysCount += 1;
+      }
+    });
+
+    const weekdayStats: WeekdayStat[] = emptyWeekdays.map((item, idx) => {
+      const wData = weekdayTotals[idx];
+      const avgVal = wData.daysCount > 0 ? wData.totalCount / wData.daysCount : 0;
+      return {
+        ...item,
+        totalCount: wData.totalCount,
+        avgCount: Math.round(avgVal * 10) / 10,
+        daysCount: wData.daysCount,
+      };
+    });
+
+    let bestW = weekdayStats[0];
+    weekdayStats.forEach((w) => {
+      if (w.avgCount > bestW.avgCount) bestW = w;
+    });
+
+    // Weekday vs Weekend Average
+    const weekdaySum = [1, 2, 3, 4, 5].reduce((acc, idx) => acc + weekdayStats[idx].totalCount, 0);
+    const weekdayDays = [1, 2, 3, 4, 5].reduce((acc, idx) => acc + weekdayStats[idx].daysCount, 0);
+    const weekendSum = [0, 6].reduce((acc, idx) => acc + weekdayStats[idx].totalCount, 0);
+    const weekendDays = [0, 6].reduce((acc, idx) => acc + weekdayStats[idx].daysCount, 0);
+
+    const weekdayAvg = weekdayDays > 0 ? Math.round((weekdaySum / weekdayDays) * 10) / 10 : 0;
+    const weekendAvg = weekendDays > 0 ? Math.round((weekendSum / weekendDays) * 10) / 10 : 0;
+
+    const positivePercentage =
+      totalEntriesCount > 0 ? Math.round((positiveEntriesCount / totalEntriesCount) * 100) : 100;
+
     return {
       bestDay: best,
       worstDay: worst,
@@ -277,8 +397,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       trendPercentage: trend,
       projected10DayTotal: projected10Day,
       projectedMonthlyTotal: projectedMonthly,
+
+      totalDaysLogged,
+      daysGoalAchieved: daysMeetingGoal,
+      peakHour: { hour: peakH.hour, timeLabel: peakH.timeLabel, avgCount: peakH.avgCount, totalCount: peakH.totalCount },
+      lowestHour: { hour: lowestH.hour, timeLabel: lowestH.timeLabel, avgCount: lowestH.avgCount, totalCount: lowestH.totalCount },
+      bestWeekday: { dayName: bestW.dayName, avgCount: bestW.avgCount },
+      weekdayStats,
+      allTimeHourlyStats,
+      positiveEntriesCount,
+      negativeEntriesCount,
+      positivePercentage,
+      totalEntriesCount,
+      weekdayAvg,
+      weekendAvg,
     };
-  }, [dayLogs, settings.dailyGoal, todayDateStr]);
+  }, [dayLogs, entries, settings.dailyGoal, todayDateStr]);
 
   // Confetti trigger for daily goal celebration
   const triggerConfetti = () => {

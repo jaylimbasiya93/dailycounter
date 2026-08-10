@@ -12,6 +12,7 @@ import {
   Area,
   LineChart,
   Line,
+  Cell,
 } from 'recharts';
 import {
   Trophy,
@@ -23,24 +24,44 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Activity,
+  PlusCircle,
+  MinusCircle,
+  Award,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const AnalyticsView: React.FC = () => {
   const { dayLogs, analytics, settings, todayDateStr } = useApp();
-  const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
-  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<Date>(new Date());
 
-  // 1. Daily Bar Chart Data (Hourly distribution for today)
-  const dailyHourlyData = useMemo(() => {
+  type PeriodType = 'hourly_all' | 'hourly_today' | 'weekly' | 'monthly' | 'cumulative';
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hourly_all');
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<Date>(new Date());
+  const [allTimeHourlyMode, setAllTimeHourlyMode] = useState<'avg' | 'total'>('avg');
+
+  // 1. All-time Hourly Average & Total Data (0..23 hours)
+  const allTimeHourlyChartData = useMemo(() => {
+    return analytics.allTimeHourlyStats.map((item) => ({
+      hour: item.hour,
+      time: item.timeLabel,
+      avg: item.avgCount,
+      total: item.totalCount,
+      entries: item.entryCount,
+      isPeak: item.hour === analytics.peakHour.hour,
+    }));
+  }, [analytics.allTimeHourlyStats, analytics.peakHour]);
+
+  // 2. Today's Hourly Data
+  const todayHourlyData = useMemo(() => {
     const todayLog = dayLogs.find((l) => l.date === todayDateStr);
     const hoursMap: Record<number, number> = {};
-    for (let h = 6; h <= 23; h++) hoursMap[h] = 0;
+    for (let h = 0; h < 24; h++) hoursMap[h] = 0;
 
     if (todayLog) {
       todayLog.entries.forEach((e) => {
         const hour = new Date(e.timestamp).getHours();
-        if (hour >= 6 && hour <= 23) {
+        if (hour >= 0 && hour < 24) {
           hoursMap[hour] = (hoursMap[hour] || 0) + e.count;
         }
       });
@@ -51,13 +72,13 @@ export const AnalyticsView: React.FC = () => {
       const period = h >= 12 ? 'PM' : 'AM';
       const displayHour = h % 12 === 0 ? 12 : h % 12;
       return {
-        time: `${displayHour}${period}`,
-        count: Math.max(0, hoursMap[h]),
+        time: `${displayHour} ${period}`,
+        count: hoursMap[h],
       };
     });
   }, [dayLogs, todayDateStr]);
 
-  // 2. Weekly Line Chart Data (Last 7 days)
+  // 3. Weekly Line Chart Data (Last 7 days)
   const weeklyData = useMemo(() => {
     const last7 = [...dayLogs.slice(0, 7)].reverse();
     return last7.map((l) => {
@@ -72,7 +93,7 @@ export const AnalyticsView: React.FC = () => {
     });
   }, [dayLogs, settings.dailyGoal]);
 
-  // 3. Monthly Area Chart Data (Last 30 days)
+  // 4. Monthly Area Chart Data (Last 30 days)
   const monthlyData = useMemo(() => {
     const last30 = [...dayLogs.slice(0, 30)].reverse();
     return last30.map((l) => {
@@ -87,7 +108,23 @@ export const AnalyticsView: React.FC = () => {
     });
   }, [dayLogs, settings.dailyGoal]);
 
-  // 4. Heatmap Matrix Data (Last 16 weeks = 112 days)
+  // 5. Cumulative Growth Trend Data (Oldest to Newest)
+  const cumulativeData = useMemo(() => {
+    const sorted = [...dayLogs].reverse();
+    let runningTotal = 0;
+    return sorted.map((l) => {
+      runningTotal += l.totalCount;
+      const d = new Date(l.date);
+      const label = `${d.getMonth() + 1}/${d.getDate()}`;
+      return {
+        date: label,
+        cumulativeCount: runningTotal,
+        cumulativeValue: runningTotal * settings.valuePerMomentum,
+      };
+    });
+  }, [dayLogs, settings.valuePerMomentum]);
+
+  // 6. Heatmap Matrix Data (Last 16 weeks = 112 days)
   const heatmapData = useMemo(() => {
     const days: { date: string; count: number; level: 0 | 1 | 2 | 3 | 4 }[] = [];
     const logMap = new Map<string, number>();
@@ -111,7 +148,7 @@ export const AnalyticsView: React.FC = () => {
     return days;
   }, [dayLogs]);
 
-  // 5. Calendar Activity View Data for current month
+  // 7. Calendar Activity View Data for current month
   const calendarDays = useMemo(() => {
     const year = selectedCalendarMonth.getFullYear();
     const month = selectedCalendarMonth.getMonth();
@@ -122,7 +159,6 @@ export const AnalyticsView: React.FC = () => {
     dayLogs.forEach((l) => logMap.set(l.date, l.totalCount));
 
     const grid = [];
-    // Padding for month start
     for (let i = 0; i < firstDay; i++) {
       grid.push({ day: null, date: null, count: 0 });
     }
@@ -135,35 +171,43 @@ export const AnalyticsView: React.FC = () => {
   }, [selectedCalendarMonth, dayLogs]);
 
   return (
-    <div className="pb-28 pt-2 px-4 max-w-md mx-auto space-y-6">
+    <div className="pb-28 pt-2 px-4 max-w-md mx-auto space-y-6 select-none">
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
           Analytics & Insights
         </h2>
         <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-          Comprehensive momentum trends and performance breakdown
+          Comprehensive momentum trends, hourly peak patterns & analytics
         </p>
       </div>
 
-      {/* Period Filter Tabs */}
-      <div className="flex bg-slate-200/60 dark:bg-zinc-900 p-1 rounded-2xl border border-slate-200/80 dark:border-zinc-800">
-        {(['daily', 'weekly', 'monthly'] as const).map((period) => (
+      {/* Main Filter Period Tabs */}
+      <div className="flex bg-slate-200/60 dark:bg-zinc-900 p-1 rounded-2xl border border-slate-200/80 dark:border-zinc-800 overflow-x-auto">
+        {(
+          [
+            { id: 'hourly_all', label: 'All-Time Hourly' },
+            { id: 'hourly_today', label: 'Today Hourly' },
+            { id: 'weekly', label: '7-Day Trend' },
+            { id: 'monthly', label: '30-Day Trend' },
+            { id: 'cumulative', label: 'Growth' },
+          ] as const
+        ).map((item) => (
           <button
-            key={period}
-            onClick={() => setSelectedPeriod(period)}
-            className={`flex-1 py-1.5 text-xs font-semibold rounded-xl capitalize transition-all ${
-              selectedPeriod === period
+            key={item.id}
+            onClick={() => setSelectedPeriod(item.id)}
+            className={`flex-1 min-w-[70px] py-1.5 px-2 text-[11px] font-semibold rounded-xl transition-all whitespace-nowrap text-center ${
+              selectedPeriod === item.id
                 ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-soft-sm'
                 : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
             }`}
           >
-            {period}
+            {item.label}
           </button>
         ))}
       </div>
 
-      {/* Interactive Charts Section */}
+      {/* Interactive Main Chart Section */}
       <motion.div
         key={selectedPeriod}
         initial={{ opacity: 0, y: 8 }}
@@ -174,17 +218,42 @@ export const AnalyticsView: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
             <BarChart2 className="w-4 h-4 text-accent-500" />
-            {selectedPeriod === 'daily' && "Today's Hourly Rhythm"}
+            {selectedPeriod === 'hourly_all' && 'All-Time Hourly Average (0–23h)'}
+            {selectedPeriod === 'hourly_today' && "Today's Hourly Rhythm"}
             {selectedPeriod === 'weekly' && '7-Day Trend Curve'}
             {selectedPeriod === 'monthly' && '30-Day Momentum Area'}
+            {selectedPeriod === 'cumulative' && 'Lifetime Cumulative Growth'}
           </span>
         </div>
 
         <div className="h-56 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            {selectedPeriod === 'daily' ? (
-              <BarChart data={dailyHourlyData}>
-                <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+            {selectedPeriod === 'hourly_all' ? (
+              <BarChart data={allTimeHourlyChartData}>
+                <XAxis dataKey="time" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} interval={2} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#09090b',
+                    borderRadius: '12px',
+                    borderColor: '#27272a',
+                    color: '#fff',
+                    fontSize: '12px',
+                  }}
+                  formatter={(val: any) => [`${val} avg/day`, 'Average Momentum']}
+                />
+                <Bar dataKey="avg" radius={[4, 4, 0, 0]}>
+                  {allTimeHourlyChartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.isPeak ? '#f59e0b' : '#6366f1'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            ) : selectedPeriod === 'hourly_today' ? (
+              <BarChart data={todayHourlyData}>
+                <XAxis dataKey="time" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} interval={2} />
                 <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip
                   contentStyle={{
@@ -195,7 +264,7 @@ export const AnalyticsView: React.FC = () => {
                     fontSize: '12px',
                   }}
                 />
-                <Bar dataKey="count" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
               </BarChart>
             ) : selectedPeriod === 'weekly' ? (
               <LineChart data={weeklyData}>
@@ -227,7 +296,7 @@ export const AnalyticsView: React.FC = () => {
                   dot={false}
                 />
               </LineChart>
-            ) : (
+            ) : selectedPeriod === 'monthly' ? (
               <AreaChart data={monthlyData}>
                 <defs>
                   <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -255,10 +324,241 @@ export const AnalyticsView: React.FC = () => {
                   fill="url(#areaGradient)"
                 />
               </AreaChart>
+            ) : (
+              <AreaChart data={cumulativeData}>
+                <defs>
+                  <linearGradient id="cumGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#09090b',
+                    borderRadius: '12px',
+                    borderColor: '#27272a',
+                    color: '#fff',
+                    fontSize: '12px',
+                  }}
+                  formatter={(val: any, name: any) => [
+                    name === 'cumulativeValue' ? `₹${val.toLocaleString('en-IN')}` : val,
+                    name === 'cumulativeValue' ? 'Total Earned Value' : 'Cumulative Momentum',
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cumulativeCount"
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#cumGradient)"
+                />
+              </AreaChart>
             )}
           </ResponsiveContainer>
         </div>
       </motion.div>
+
+      {/* 1. NEW ANALYTICS SECTION: Lifetime Hourly Rhythm & Peak Hours Breakdown */}
+      <div className="rounded-3xl bg-white dark:bg-zinc-900 p-5 border border-slate-200/80 dark:border-zinc-800/80 shadow-soft-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Clock className="w-4 h-4 text-accent-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+              All-Time Hourly Peak Rhythm
+            </h3>
+          </div>
+
+          <div className="flex bg-slate-100 dark:bg-zinc-800 p-0.5 rounded-xl text-[10px] font-semibold">
+            <button
+              onClick={() => setAllTimeHourlyMode('avg')}
+              className={`px-2 py-1 rounded-lg transition ${
+                allTimeHourlyMode === 'avg'
+                  ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-soft-sm font-bold'
+                  : 'text-slate-500'
+              }`}
+            >
+              Avg / Day
+            </button>
+            <button
+              onClick={() => setAllTimeHourlyMode('total')}
+              className={`px-2 py-1 rounded-lg transition ${
+                allTimeHourlyMode === 'total'
+                  ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-soft-sm font-bold'
+                  : 'text-slate-500'
+              }`}
+            >
+              Total Score
+            </button>
+          </div>
+        </div>
+
+        {/* Peak Hour Banner & Quiet Hour Banner */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300">
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Peak Activity Hour
+              </span>
+            </div>
+            <div className="text-base font-extrabold text-slate-900 dark:text-white leading-tight">
+              {analytics.peakHour.timeLabel}
+            </div>
+            <span className="text-[10px] text-amber-700 dark:text-amber-400 block mt-0.5">
+              Avg <strong>{analytics.peakHour.avgCount}</strong> pts ({analytics.peakHour.totalCount} total)
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-900 dark:text-indigo-300">
+            <div className="flex items-center space-x-1.5 mb-1">
+              <Activity className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                Lowest Activity Hour
+              </span>
+            </div>
+            <div className="text-base font-extrabold text-slate-900 dark:text-white leading-tight">
+              {analytics.lowestHour.timeLabel}
+            </div>
+            <span className="text-[10px] text-indigo-700 dark:text-indigo-400 block mt-0.5">
+              Avg <strong>{analytics.lowestHour.avgCount}</strong> pts ({analytics.lowestHour.totalCount} total)
+            </span>
+          </div>
+        </div>
+
+        {/* 24-Hour All-Time Bar Chart */}
+        <div className="h-44 w-full pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={allTimeHourlyChartData}>
+              <XAxis dataKey="time" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} interval={3} />
+              <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#09090b',
+                  borderRadius: '12px',
+                  borderColor: '#27272a',
+                  color: '#fff',
+                  fontSize: '11px',
+                }}
+                formatter={(val: any) => [
+                  allTimeHourlyMode === 'avg' ? `${val} pts/day` : `${val} total pts`,
+                  allTimeHourlyMode === 'avg' ? 'Historical Average' : 'Total Score',
+                ]}
+              />
+              <Bar
+                dataKey={allTimeHourlyMode === 'avg' ? 'avg' : 'total'}
+                radius={[4, 4, 0, 0]}
+              >
+                {allTimeHourlyChartData.map((entry, index) => (
+                  <Cell
+                    key={`alltime-cell-${index}`}
+                    fill={entry.isPeak ? '#f59e0b' : '#6366f1'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* 2. NEW ANALYTICS SECTION: Day-of-Week (Weekday) Performance Pattern */}
+      <div className="rounded-3xl bg-white dark:bg-zinc-900 p-5 border border-slate-200/80 dark:border-zinc-800/80 shadow-soft-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Award className="w-4 h-4 text-emerald-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+              Weekday Habit Rhythm
+            </h3>
+          </div>
+          <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+            Best: {analytics.bestWeekday.dayName} ({analytics.bestWeekday.avgCount} avg)
+          </span>
+        </div>
+
+        {/* Weekday Bar Chart */}
+        <div className="h-40 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={analytics.weekdayStats}>
+              <XAxis dataKey="dayName" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+              <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#09090b',
+                  borderRadius: '12px',
+                  borderColor: '#27272a',
+                  color: '#fff',
+                  fontSize: '11px',
+                }}
+                formatter={(val: any) => [`${val} avg counts/day`, 'Average Score']}
+              />
+              <Bar dataKey="avgCount" radius={[6, 6, 0, 0]}>
+                {analytics.weekdayStats.map((entry, index) => (
+                  <Cell
+                    key={`weekday-cell-${index}`}
+                    fill={entry.dayName === analytics.bestWeekday.dayName ? '#10b981' : '#818cf8'}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Weekday vs Weekend Comparison Pills */}
+        <div className="pt-2 border-t border-slate-100 dark:border-zinc-800/80 grid grid-cols-2 gap-3 text-center">
+          <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-100 dark:border-zinc-800/60">
+            <span className="text-[10px] font-medium text-slate-400 dark:text-zinc-500 block">
+              Weekday Average (Mon–Fri)
+            </span>
+            <span className="text-base font-extrabold text-slate-900 dark:text-white">
+              {analytics.weekdayAvg} <span className="text-xs font-normal text-slate-400">pts/day</span>
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-100 dark:border-zinc-800/60">
+            <span className="text-[10px] font-medium text-slate-400 dark:text-zinc-500 block">
+              Weekend Average (Sat–Sun)
+            </span>
+            <span className="text-base font-extrabold text-slate-900 dark:text-white">
+              {analytics.weekendAvg} <span className="text-xs font-normal text-slate-400">pts/day</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. NEW ANALYTICS SECTION: Entry Type & Incremental Dynamics */}
+      <div className="rounded-3xl bg-white dark:bg-zinc-900 p-5 border border-slate-200/80 dark:border-zinc-800/80 shadow-soft-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <PlusCircle className="w-4 h-4 text-emerald-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+              Entry Type & Incremental Dynamics
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold text-slate-500">
+            {analytics.totalEntriesCount} total log sessions
+          </span>
+        </div>
+
+        {/* Ratio Progress Bar */}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs font-semibold">
+            <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <PlusCircle className="w-3.5 h-3.5" /> Positive (+): {analytics.positiveEntriesCount} ({analytics.positivePercentage}%)
+            </span>
+            <span className="text-rose-500 flex items-center gap-1">
+              <MinusCircle className="w-3.5 h-3.5" /> Decrements (-): {analytics.negativeEntriesCount}
+            </span>
+          </div>
+          <div className="w-full h-3 rounded-full bg-rose-500/20 overflow-hidden flex">
+            <div
+              className="h-full bg-emerald-500 transition-all duration-500"
+              style={{ width: `${analytics.positivePercentage}%` }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* GitHub-style Contribution Heatmap */}
       <div className="rounded-3xl bg-white dark:bg-zinc-900 p-5 border border-slate-200/80 dark:border-zinc-800/80 shadow-soft-sm space-y-3">
@@ -402,11 +702,11 @@ export const AnalyticsView: React.FC = () => {
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-semibold uppercase text-slate-400">Consistency</span>
+              <span className="text-[10px] font-semibold uppercase text-slate-400">Goal Rate</span>
               <div className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
                 {analytics.consistencyScore}%
               </div>
-              <span className="text-[10px] text-slate-400">Goal Target Rate</span>
+              <span className="text-[10px] text-slate-400">{analytics.daysGoalAchieved}/{analytics.totalDaysLogged} days goal met</span>
             </div>
           </div>
 

@@ -24,6 +24,21 @@ export interface AppSettings {
 
 export type TabType = 'dashboard' | 'analytics' | 'history' | 'settings';
 
+export interface HourlyStat {
+  hour: number; // 0..23
+  timeLabel: string; // e.g. "9 AM", "4 PM"
+  totalCount: number;
+  avgCount: number;
+  entryCount: number;
+}
+
+export interface WeekdayStat {
+  dayName: string; // "Sun", "Mon", ...
+  totalCount: number;
+  avgCount: number;
+  daysCount: number;
+}
+
 export interface AnalyticsSummary {
   bestDay: { date: string; count: number };
   worstDay: { date: string; count: number };
@@ -32,4 +47,18 @@ export interface AnalyticsSummary {
   trendPercentage: number;
   projected10DayTotal: number;
   projectedMonthlyTotal: number;
+
+  totalDaysLogged: number;
+  daysGoalAchieved: number;
+  peakHour: { hour: number; timeLabel: string; avgCount: number; totalCount: number };
+  lowestHour: { hour: number; timeLabel: string; avgCount: number; totalCount: number };
+  bestWeekday: { dayName: string; avgCount: number };
+  weekdayStats: WeekdayStat[];
+  allTimeHourlyStats: HourlyStat[];
+  positiveEntriesCount: number;
+  negativeEntriesCount: number;
+  positivePercentage: number;
+  totalEntriesCount: number;
+  weekdayAvg: number;
+  weekendAvg: number;
 }
