@@ -3,6 +3,7 @@ import type { MomentumEntry, AppSettings } from '../types';
 export const DEFAULT_SETTINGS: AppSettings = {
   valuePerMomentum: 50,
   dailyGoal: 50,
+  lifetimeGoal: 251,
   reminderTime: '20:00',
   theme: 'system',
   soundEnabled: true,

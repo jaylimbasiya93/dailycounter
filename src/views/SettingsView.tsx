@@ -129,6 +129,29 @@ export const SettingsView: React.FC = () => {
           />
         </div>
 
+        {/* Lifetime Goal */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+              Lifetime Target Goal
+            </label>
+            <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
+              Default: 251 score
+            </span>
+          </div>
+          <input
+            type="number"
+            min="1"
+            max="1000000"
+            value={settings.lifetimeGoal ?? 251}
+            onChange={(e) => updateSettings({ lifetimeGoal: Math.max(1, parseInt(e.target.value) || 1) })}
+            className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+          />
+          <span className="text-[11px] text-slate-400 block mt-1">
+            Target total score. Analytics calculates estimated completion days based on current pace.
+          </span>
+        </div>
+
         {/* Reminder Time */}
         <div>
           <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 block mb-1">

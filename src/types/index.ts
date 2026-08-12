@@ -15,6 +15,7 @@ export interface DayLog {
 export interface AppSettings {
   valuePerMomentum: number; // Default ₹50
   dailyGoal: number; // Default 50
+  lifetimeGoal: number; // Default 251
   reminderTime: string; // "20:00"
   theme: 'light' | 'dark' | 'system';
   soundEnabled: boolean;
