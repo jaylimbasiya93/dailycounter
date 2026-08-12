@@ -18,6 +18,7 @@ export const DashboardView: React.FC = () => {
     incrementMomentum,
     decrementMomentum,
     analytics,
+    dayLogs,
     setActiveTab,
   } = useApp();
 
@@ -53,8 +54,19 @@ export const DashboardView: React.FC = () => {
   const isLifetimeGoalAchieved = lifetimeCount >= lifetimeGoal;
   const lifetimePercentage = Math.min(100, Math.round((lifetimeCount / lifetimeGoal) * 100));
 
-  // Determine active daily pace based on current scenario
-  const activePace = weeklyAverage > 0 ? weeklyAverage : (monthlyAverage > 0 ? monthlyAverage : (analytics.dailyAverage > 0 ? analytics.dailyAverage : 1));
+  // Determine realistic active daily pace based on actual logged days and current momentum
+  const activeDaysLast7 = Math.max(1, dayLogs.slice(0, 7).length);
+  const sumLast7 = dayLogs.slice(0, 7).reduce((acc: number, d) => acc + d.totalCount, 0);
+  const pace7DayReal = Math.round((sumLast7 / activeDaysLast7) * 10) / 10;
+
+  const activePace = Math.max(
+    1,
+    todayCount,
+    pace7DayReal,
+    weeklyAverage,
+    analytics.dailyAverage
+  );
+
   const daysToComplete = isLifetimeGoalAchieved ? 0 : Math.ceil(lifetimeRemaining / activePace);
 
   const getEstimatedCompletionDate = (days: number) => {

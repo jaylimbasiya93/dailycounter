@@ -120,7 +120,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setTodayDateStr((prev) => (prev !== currentLocal ? currentLocal : prev));
     };
 
-    const interval = setInterval(checkDateChange, 5000);
+    const interval = setInterval(checkDateChange, 1000);
     window.addEventListener('focus', checkDateChange);
     document.addEventListener('visibilitychange', checkDateChange);
 
