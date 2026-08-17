@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
-import type { MomentumEntry, AppSettings, TabType, DayLog, AnalyticsSummary, HourlyStat, WeekdayStat } from '../types';
+import type { MomentumEntry, PersonTarget, AppSettings, TabType, DayLog, AnalyticsSummary, HourlyStat, WeekdayStat } from '../types';
 import { DEFAULT_SETTINGS, generateSeedEntries } from '../utils/mockData';
 import { getLocalDateStr } from '../utils/date';
 import { soundEffects } from '../utils/audio';
@@ -21,6 +21,11 @@ interface AppContextType {
   monthlyAverage: number;
   dayLogs: DayLog[];
   analytics: AnalyticsSummary;
+  persons: PersonTarget[];
+  addPerson: (name: string, target?: number) => void;
+  clearPerson: (id: string) => void;
+  deletePerson: (id: string, redistribute?: boolean) => void;
+  updatePersonTarget: (id: string, target: number) => void;
   incrementMomentum: (amount?: number) => void;
   decrementMomentum: (amount?: number) => void;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
@@ -39,6 +44,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_ENTRIES_KEY = 'daily_counter_entries_v1';
 const LOCAL_STORAGE_SETTINGS_KEY = 'daily_counter_settings_v1';
+const LOCAL_STORAGE_PERSONS_KEY = 'daily_counter_persons_v1';
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [entries, setEntries] = useState<MomentumEntry[]>(() => {
@@ -65,8 +71,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return DEFAULT_SETTINGS;
   });
 
+  const [persons, setPersons] = useState<PersonTarget[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_PERSONS_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // Fallback
+    }
+    return [];
+  });
+
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [undoStack, setUndoStack] = useState<MomentumEntry[][]>([]);
+
+  // Sync persons to local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_PERSONS_KEY, JSON.stringify(persons));
+    } catch (e) {
+      console.error('Failed to save persons to localStorage', e);
+    }
+  }, [persons]);
 
   // Sync entries to local storage
   useEffect(() => {
@@ -424,6 +451,94 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  // Person Management & Random Allocation Logic
+  const addPerson = (name: string, target?: number) => {
+    if (!name.trim()) return;
+    const defaultTarget =
+      target && target > 0
+        ? target
+        : Math.max(10, Math.ceil(settings.dailyGoal / Math.max(1, persons.length + 1)));
+
+    const newPerson: PersonTarget = {
+      id: `person-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: name.trim(),
+      score: 0,
+      target: defaultTarget,
+      createdAt: Date.now(),
+    };
+    setPersons((prev) => [...prev, newPerson]);
+  };
+
+  const clearPerson = (id: string) => {
+    setPersons((prev) => {
+      const targetPerson = prev.find((p) => p.id === id);
+      if (!targetPerson) return prev;
+
+      const creditsToDistribute = targetPerson.score;
+      const remainingPersons = prev.filter((p) => p.id !== id);
+
+      if (remainingPersons.length === 0 || creditsToDistribute <= 0) {
+        return prev.map((p) => (p.id === id ? { ...p, score: 0 } : p));
+      }
+
+      const bonusMap: Record<string, number> = {};
+      remainingPersons.forEach((p) => {
+        bonusMap[p.id] = 0;
+      });
+
+      for (let i = 0; i < creditsToDistribute; i++) {
+        const randIdx = Math.floor(Math.random() * remainingPersons.length);
+        const recipientId = remainingPersons[randIdx].id;
+        bonusMap[recipientId] = (bonusMap[recipientId] || 0) + 1;
+      }
+
+      return prev.map((p) => {
+        if (p.id === id) {
+          return { ...p, score: 0 };
+        }
+        return {
+          ...p,
+          score: p.score + (bonusMap[p.id] || 0),
+        };
+      });
+    });
+  };
+
+  const deletePerson = (id: string, redistribute = true) => {
+    setPersons((prev) => {
+      const targetPerson = prev.find((p) => p.id === id);
+      if (!targetPerson) return prev;
+
+      const remainingPersons = prev.filter((p) => p.id !== id);
+      if (!redistribute || remainingPersons.length === 0 || targetPerson.score <= 0) {
+        return remainingPersons;
+      }
+
+      const creditsToDistribute = targetPerson.score;
+      const bonusMap: Record<string, number> = {};
+      remainingPersons.forEach((p) => {
+        bonusMap[p.id] = 0;
+      });
+
+      for (let i = 0; i < creditsToDistribute; i++) {
+        const randIdx = Math.floor(Math.random() * remainingPersons.length);
+        const recipientId = remainingPersons[randIdx].id;
+        bonusMap[recipientId] = (bonusMap[recipientId] || 0) + 1;
+      }
+
+      return remainingPersons.map((p) => ({
+        ...p,
+        score: p.score + (bonusMap[p.id] || 0),
+      }));
+    });
+  };
+
+  const updatePersonTarget = (id: string, target: number) => {
+    setPersons((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, target: Math.max(1, target) } : p))
+    );
+  };
+
   // Increment Momentum (+1)
   const incrementMomentum = (amount = 1) => {
     const now = Date.now();
@@ -435,6 +550,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     setEntries((prev) => [newEntry, ...prev]);
+
+    // Randomly allocate score to 1 person
+    setPersons((prevPersons) => {
+      if (prevPersons.length === 0) return prevPersons;
+      const randIdx = Math.floor(Math.random() * prevPersons.length);
+      return prevPersons.map((p, idx) =>
+        idx === randIdx ? { ...p, score: p.score + amount } : p
+      );
+    });
 
     if (settings.soundEnabled) soundEffects.playIncrement();
     if (settings.hapticsEnabled) hapticLight();
@@ -458,6 +582,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     setEntries((prev) => [newEntry, ...prev]);
+
+    // Randomly subtract score from 1 person
+    setPersons((prevPersons) => {
+      if (prevPersons.length === 0) return prevPersons;
+      const personsWithScore = prevPersons.filter((p) => p.score > 0);
+      const candidates = personsWithScore.length > 0 ? personsWithScore : prevPersons;
+      const selected = candidates[Math.floor(Math.random() * candidates.length)];
+      return prevPersons.map((p) =>
+        p.id === selected.id ? { ...p, score: Math.max(0, p.score - amount) } : p
+      );
+    });
 
     if (settings.soundEnabled) soundEffects.playDecrement();
     if (settings.hapticsEnabled) hapticMedium();
@@ -492,6 +627,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       exportedAt: new Date().toISOString(),
       settings,
       entries,
+      persons,
     };
     const jsonStr = JSON.stringify(data, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -511,6 +647,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (parsed.settings) {
           setSettings((prev) => ({ ...prev, ...parsed.settings }));
         }
+        if (Array.isArray(parsed.persons)) {
+          setPersons(parsed.persons);
+        }
         return true;
       }
     } catch {
@@ -521,9 +660,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const resetData = () => {
     setEntries([]);
+    setPersons([]);
     setSettings(DEFAULT_SETTINGS);
     localStorage.removeItem(LOCAL_STORAGE_ENTRIES_KEY);
     localStorage.removeItem(LOCAL_STORAGE_SETTINGS_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_PERSONS_KEY);
   };
 
   const seedSampleData = () => {
@@ -547,6 +688,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         monthlyAverage,
         dayLogs,
         analytics,
+        persons,
+        addPerson,
+        clearPerson,
+        deletePerson,
+        updatePersonTarget,
         incrementMomentum,
         decrementMomentum,
         updateSettings,

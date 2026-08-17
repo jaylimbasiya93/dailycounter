@@ -6,6 +6,14 @@ export interface MomentumEntry {
   note?: string;
 }
 
+export interface PersonTarget {
+  id: string;
+  name: string;
+  score: number;
+  target: number;
+  createdAt: number;
+}
+
 export interface DayLog {
   date: string;
   totalCount: number;

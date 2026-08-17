@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppDataContext';
 import { RollingNumber } from '../components/ui/RollingNumber';
 import { ProgressRing } from '../components/ui/ProgressRing';
+import { PersonTracker } from '../components/PersonTracker';
 import { Plus, Minus, Flame, TrendingUp, Zap, ChevronRight, Trophy, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -203,6 +204,9 @@ export const DashboardView: React.FC = () => {
           </div>
         </motion.div>
       </div>
+
+      {/* Person Goal Allocation & Random Score Distribution (Below Daily Goal) */}
+      <PersonTracker />
 
       {/* 4. Lifetime Goal Circle Analytics Card */}
       <motion.div
