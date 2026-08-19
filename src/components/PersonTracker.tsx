@@ -13,7 +13,6 @@ import {
   Calendar,
   TrendingUp,
   Target,
-  Clock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getFutureDateStr, getDaysDifference } from '../utils/date';
@@ -30,7 +29,6 @@ export const PersonTracker: React.FC = () => {
     todayCount,
     todayDateStr,
     settings,
-    updateSettings,
     addPerson,
     clearPerson,
     deletePerson,
