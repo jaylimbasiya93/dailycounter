@@ -11,6 +11,7 @@ export interface PersonTarget {
   name: string;
   score: number;
   target: number;
+  dueDate?: string; // Person-wise due date YYYY-MM-DD
   createdAt: number;
 }
 

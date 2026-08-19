@@ -13,9 +13,10 @@ import {
   Calendar,
   TrendingUp,
   Target,
+  Clock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getFutureDateStr } from '../utils/date';
+import { getFutureDateStr, getDaysDifference } from '../utils/date';
 
 export const PersonTracker: React.FC = () => {
   const {
@@ -27,20 +28,23 @@ export const PersonTracker: React.FC = () => {
     weeklyAverage,
     analytics,
     todayCount,
+    todayDateStr,
     settings,
     updateSettings,
     addPerson,
     clearPerson,
     deletePerson,
-    updatePersonTarget,
+    updatePerson,
   } = useApp();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newTarget, setNewTarget] = useState<number | ''>(10);
+  const [newDueDate, setNewDueDate] = useState<string>(getFutureDateStr(30));
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTargetValue, setEditTargetValue] = useState<number>(10);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [editDueDateValue, setEditDueDateValue] = useState<string>(getFutureDateStr(30));
 
   // Status state for showing animated toast message when credits are redistributed
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -54,9 +58,11 @@ export const PersonTracker: React.FC = () => {
     e.preventDefault();
     if (!newName.trim()) return;
     const targetVal = typeof newTarget === 'number' && newTarget > 0 ? newTarget : 10;
-    addPerson(newName.trim(), targetVal);
+    const dueVal = newDueDate || getFutureDateStr(30);
+    addPerson(newName.trim(), targetVal, dueVal);
     setNewName('');
     setNewTarget(10);
+    setNewDueDate(getFutureDateStr(30));
     setIsAdding(false);
   };
 
@@ -75,20 +81,18 @@ export const PersonTracker: React.FC = () => {
     }
   };
 
-  const handleSaveTarget = (id: string) => {
+  const handleSavePersonEdits = (id: string) => {
     if (editTargetValue > 0) {
-      updatePersonTarget(id, editTargetValue);
+      updatePerson(id, {
+        target: editTargetValue,
+        dueDate: editDueDateValue || getFutureDateStr(30),
+      });
     }
     setEditingId(null);
   };
 
   // Determine active overall daily pace
   const activePace = Math.max(1, todayCount, weeklyAverage, analytics.dailyAverage);
-
-  const handleQuickPresetDate = (days: number) => {
-    updateSettings({ dueDate: getFutureDateStr(days) });
-    setShowDatePicker(false);
-  };
 
   return (
     <div className="space-y-3">
@@ -139,7 +143,7 @@ export const PersonTracker: React.FC = () => {
         </button>
       </div>
 
-      {/* Combined Persons Total Goal & Due Date Overview Banner */}
+      {/* Combined Persons Total Goal Banner */}
       {persons.length > 0 && (
         <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white p-4 shadow-soft-md space-y-3">
           <div className="flex items-center justify-between">
@@ -147,87 +151,39 @@ export const PersonTracker: React.FC = () => {
               <Target className="w-4 h-4 text-indigo-300" />
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-200 block leading-tight">
-                  Total Team Goal & Deadline
+                  Combined Persons Total Score & Goal
                 </span>
-                <span className="text-xs font-extrabold text-white">
+                <span className="text-sm font-extrabold text-white">
                   Score: {totalPersonScore} / {totalPersonTarget}
                 </span>
               </div>
             </div>
-
-            <button
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex items-center space-x-1.5 px-3 py-1 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold text-white transition"
-            >
-              <Calendar className="w-3.5 h-3.5 text-indigo-300" />
-              <span>{settings.dueDate ? settings.dueDate : 'Set Due Date'}</span>
-            </button>
+            <span className="px-2.5 py-1 rounded-xl bg-white/10 text-indigo-200 text-xs font-bold border border-white/20">
+              {persons.length} Person Goals
+            </span>
           </div>
 
-          {/* Quick Date Picker Form Drawer */}
-          <AnimatePresence>
-            {showDatePicker && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden p-3 rounded-2xl bg-indigo-950/90 border border-indigo-700/50 space-y-2 text-xs"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-indigo-200">Select Target Goal Due Date:</span>
-                  <input
-                    type="date"
-                    value={settings.dueDate || ''}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        updateSettings({ dueDate: e.target.value });
-                      }
-                    }}
-                    className="px-2 py-1 rounded-xl bg-indigo-900 border border-indigo-600 text-white font-bold focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-1.5 pt-1">
-                  <span className="text-[10px] text-indigo-300">Quick Presets:</span>
-                  {[
-                    { label: '+7 Days', days: 7 },
-                    { label: '+30 Days', days: 30 },
-                    { label: '+90 Days', days: 90 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.days}
-                      onClick={() => handleQuickPresetDate(preset.days)}
-                      className="px-2 py-0.5 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-indigo-100 text-[10px] font-bold border border-indigo-600/60"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Combined Progress & Days Remaining Stats */}
+          {/* Combined Progress & Pace Stats */}
           <div className="grid grid-cols-3 gap-2 pt-1 border-t border-indigo-700/40 text-center">
             <div className="p-2 rounded-2xl bg-white/10">
-              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Days Left</span>
+              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Earliest Deadline</span>
               <span className="text-xs font-black text-white block">{daysRemainingToDueDate} days</span>
             </div>
 
             <div className="p-2 rounded-2xl bg-white/10">
-              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Daily Pace</span>
+              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Current Daily Pace</span>
               <span className="text-xs font-black text-white block">{activePace} / day</span>
             </div>
 
             <div className="p-2 rounded-2xl bg-white/10">
-              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Req. Daily Pace</span>
+              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Total Req. Pace</span>
               <span className="text-xs font-black text-amber-300 block">{requiredDailyPace} / day</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Person Inline Drawer / Form */}
+      {/* Add Person Form Drawer with Person-Wise Due Date */}
       <AnimatePresence>
         {isAdding && (
           <motion.form
@@ -241,11 +197,11 @@ export const PersonTracker: React.FC = () => {
               <span className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> New Person Goal
               </span>
-              <span className="text-[10px] text-slate-400">Points auto-assigned on + / -</span>
+              <span className="text-[10px] text-slate-400">Set individual target & due date</span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
                 <label className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 block mb-1">
                   Person Name
                 </label>
@@ -272,6 +228,18 @@ export const PersonTracker: React.FC = () => {
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 block mb-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-indigo-500" /> Person Due Date
+              </label>
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
 
             <div className="flex justify-end space-x-2 pt-1">
@@ -301,7 +269,7 @@ export const PersonTracker: React.FC = () => {
           </div>
           <h4 className="text-xs font-bold text-slate-800 dark:text-zinc-200">No Person Goals Set Yet</h4>
           <p className="text-[11px] text-slate-500 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
-            Add team members or family members. When you tap <span className="font-bold text-indigo-600 dark:text-indigo-400">+</span> or <span className="font-bold text-indigo-600 dark:text-indigo-400">-</span>, counts will be automatically & randomly allocated to them!
+            Add team members or family members with custom targets & due dates. When you tap <span className="font-bold text-indigo-600 dark:text-indigo-400">+</span> or <span className="font-bold text-indigo-600 dark:text-indigo-400">-</span>, counts will be automatically allocated to them!
           </p>
           <button
             onClick={() => setIsAdding(true)}
@@ -313,7 +281,7 @@ export const PersonTracker: React.FC = () => {
         </div>
       )}
 
-      {/* Person List Cards with Live Expected Analytics */}
+      {/* Person List Cards with Person-Wise Due Date & Live Expected Analytics */}
       {persons.length > 0 && (
         <div className="space-y-2.5">
           {persons.map((person) => {
@@ -323,20 +291,26 @@ export const PersonTracker: React.FC = () => {
             );
             const isCompleted = person.score >= person.target;
 
+            // Person-Specific Due Date calculations
+            const personDueDate = person.dueDate || settings.dueDate || getFutureDateStr(30);
+            const personDaysRemaining = getDaysDifference(personDueDate, todayDateStr);
+
             // Live Expected Individual Daily Analytics
             const personShare =
               totalPersonTarget > 0 ? person.target / totalPersonTarget : 1 / persons.length;
             const expectedIndividualDailyAvg = Math.round(activePace * personShare * 10) / 10;
             const expectedIndividualScoreByDueDate =
-              person.score + Math.round(expectedIndividualDailyAvg * daysRemainingToDueDate);
+              person.score + Math.round(expectedIndividualDailyAvg * personDaysRemaining);
             const requiredIndividualDailyPace = Math.max(
               0,
               Math.round(
-                ((person.target - person.score) / Math.max(1, daysRemainingToDueDate)) * 10
+                ((person.target - person.score) / Math.max(1, personDaysRemaining)) * 10
               ) / 10
             );
             const isOnTrack =
               isCompleted || expectedIndividualScoreByDueDate >= person.target;
+
+            const isEditingThis = editingId === person.id;
 
             return (
               <motion.div
@@ -346,7 +320,7 @@ export const PersonTracker: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-3xl bg-white dark:bg-zinc-900 p-4 border border-slate-200/80 dark:border-zinc-800 shadow-soft-sm space-y-3"
               >
-                {/* Person Header (Left: Name & Target, Right: Clear & Options) */}
+                {/* Person Header (Left: Name & Target/Due, Right: Actions) */}
                 <div className="flex items-center justify-between">
                   {/* Left Side: Person Name & Score Badge */}
                   <div className="flex items-center space-x-2">
@@ -371,11 +345,15 @@ export const PersonTracker: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-2 text-[11px] text-slate-500 dark:text-zinc-400 font-medium">
                         <span>
-                          Completed Score:{' '}
+                          Score:{' '}
                           <strong className="text-slate-900 dark:text-white font-extrabold">
                             {person.score}
                           </strong>{' '}
                           / {person.target}
+                        </span>
+                        <span>•</span>
+                        <span className="flex items-center gap-0.5 text-indigo-600 dark:text-indigo-400 font-semibold">
+                          <Calendar className="w-3 h-3 inline" /> Due: {personDueDate} ({personDaysRemaining}d left)
                         </span>
                       </div>
                     </div>
@@ -384,30 +362,22 @@ export const PersonTracker: React.FC = () => {
                   {/* Right Side: Clear Icon & Target Edit */}
                   <div className="flex items-center space-x-1">
                     {/* Edit Target button / inline */}
-                    {editingId === person.id ? (
-                      <div className="flex items-center space-x-1">
-                        <input
-                          type="number"
-                          min="1"
-                          value={editTargetValue}
-                          onChange={(e) => setEditTargetValue(parseInt(e.target.value) || 1)}
-                          className="w-14 px-1.5 py-0.5 rounded-lg border border-indigo-400 bg-slate-50 dark:bg-zinc-950 text-xs font-bold text-center"
-                        />
-                        <button
-                          onClick={() => handleSaveTarget(person.id)}
-                          className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-bold"
-                        >
-                          Save
-                        </button>
-                      </div>
+                    {isEditingThis ? (
+                      <button
+                        onClick={() => handleSavePersonEdits(person.id)}
+                        className="px-2.5 py-1 rounded-xl bg-indigo-600 text-white text-[11px] font-bold"
+                      >
+                        Save
+                      </button>
                     ) : (
                       <button
                         onClick={() => {
                           setEditingId(person.id);
                           setEditTargetValue(person.target);
+                          setEditDueDateValue(personDueDate);
                         }}
                         className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 transition"
-                        title="Edit Target Goal"
+                        title="Edit Target Goal & Due Date"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -433,6 +403,45 @@ export const PersonTracker: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Inline Editing Controls for Person Target & Due Date */}
+                <AnimatePresence>
+                  {isEditingThis && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="p-3 rounded-2xl bg-indigo-50 dark:bg-zinc-950 border border-indigo-200 dark:border-indigo-900/50 space-y-2 text-xs"
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Target Score
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={editTargetValue}
+                            onChange={(e) => setEditTargetValue(parseInt(e.target.value) || 1)}
+                            className="w-full px-2 py-1 rounded-xl border border-indigo-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-bold"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-semibold text-slate-500 block mb-1">
+                            Person Due Date
+                          </label>
+                          <input
+                            type="date"
+                            value={editDueDateValue}
+                            onChange={(e) => setEditDueDateValue(e.target.value)}
+                            className="w-full px-2 py-1 rounded-xl border border-indigo-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-bold"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* Progress Bar Below Name */}
                 <div className="space-y-1">
                   <div className="w-full h-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden relative">
@@ -449,7 +458,7 @@ export const PersonTracker: React.FC = () => {
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400 dark:text-zinc-500 px-0.5">
-                    <span>Rate: {completionPercentage}%</span>
+                    <span>Progress: {completionPercentage}%</span>
                     <span>
                       {isCompleted ? (
                         <span className="text-emerald-600 dark:text-emerald-400 font-bold">Goal Achieved! 🎉</span>
@@ -489,7 +498,7 @@ export const PersonTracker: React.FC = () => {
                       <span className="text-[9px] text-slate-400 block">counts/day</span>
                     </div>
 
-                    {/* Expected Score by Due Date */}
+                    {/* Expected Score by Person Due Date */}
                     <div className="p-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800">
                       <span className="text-[9px] font-medium text-slate-400 dark:text-zinc-500 block mb-0.5">
                         Exp. Score on Due
@@ -500,7 +509,7 @@ export const PersonTracker: React.FC = () => {
                       <span className="text-[9px] text-slate-400 block">/ {person.target} target</span>
                     </div>
 
-                    {/* Required Daily Pace */}
+                    {/* Required Daily Pace for Person Due Date */}
                     <div className="p-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800">
                       <span className="text-[9px] font-medium text-slate-400 dark:text-zinc-500 block mb-0.5">
                         Req. Daily Pace
@@ -520,7 +529,7 @@ export const PersonTracker: React.FC = () => {
           <div className="p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 text-[11px] text-slate-600 dark:text-zinc-400 flex items-start space-x-2">
             <Shuffle className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
             <p className="leading-snug">
-              Counts from <span className="font-bold text-slate-900 dark:text-white">+</span> and <span className="font-bold text-slate-900 dark:text-white">-</span> are randomly assigned. Scores are total & persistent. Live expected individual daily stats automatically recalculate!
+              Each person has their own target goal & due date! Counts from <span className="font-bold text-slate-900 dark:text-white">+</span> and <span className="font-bold text-slate-900 dark:text-white">-</span> automatically recalculate live expected scores for each person!
             </p>
           </div>
         </div>

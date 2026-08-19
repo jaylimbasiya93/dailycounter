@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { MomentumEntry, PersonTarget, AppSettings, TabType, DayLog, AnalyticsSummary, HourlyStat, WeekdayStat } from '../types';
 import { DEFAULT_SETTINGS, generateSeedEntries } from '../utils/mockData';
-import { getLocalDateStr, getDaysDifference } from '../utils/date';
+import { getLocalDateStr, getDaysDifference, getFutureDateStr } from '../utils/date';
 import { soundEffects } from '../utils/audio';
 import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 import confetti from 'canvas-confetti';
@@ -26,10 +26,11 @@ interface AppContextType {
   totalPersonScore: number;
   daysRemainingToDueDate: number;
   requiredDailyPace: number;
-  addPerson: (name: string, target?: number) => void;
+  addPerson: (name: string, target?: number, dueDate?: string) => void;
   clearPerson: (id: string) => void;
   deletePerson: (id: string, redistribute?: boolean) => void;
   updatePersonTarget: (id: string, target: number) => void;
+  updatePerson: (id: string, updates: Partial<PersonTarget>) => void;
   incrementMomentum: (amount?: number) => void;
   decrementMomentum: (amount?: number) => void;
   updateSettings: (newSettings: Partial<AppSettings>) => void;
@@ -212,15 +213,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [persons, lifetimeCount]);
 
   const daysRemainingToDueDate = useMemo(() => {
+    if (persons.length > 0) {
+      const daysList = persons.map((p) =>
+        getDaysDifference(p.dueDate || settings.dueDate || getFutureDateStr(30), todayDateStr)
+      );
+      return Math.min(...daysList);
+    }
     if (!settings.dueDate) return 30;
     return getDaysDifference(settings.dueDate, todayDateStr);
-  }, [settings.dueDate, todayDateStr]);
+  }, [persons, settings.dueDate, todayDateStr]);
 
   const requiredDailyPace = useMemo(() => {
+    if (persons.length > 0) {
+      return persons.reduce((sum, p) => {
+        const d = getDaysDifference(p.dueDate || settings.dueDate || getFutureDateStr(30), todayDateStr);
+        const rem = Math.max(0, p.target - p.score);
+        return sum + Math.ceil(rem / Math.max(1, d));
+      }, 0);
+    }
     const remaining = Math.max(0, totalPersonTarget - totalPersonScore);
     if (remaining <= 0) return 0;
     return Math.ceil(remaining / Math.max(1, daysRemainingToDueDate));
-  }, [totalPersonTarget, totalPersonScore, daysRemainingToDueDate]);
+  }, [persons, totalPersonTarget, totalPersonScore, daysRemainingToDueDate, settings.dueDate, todayDateStr]);
 
   // Streak computations
   const { currentStreak, longestStreak } = useMemo(() => {
@@ -482,7 +496,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Person Management & Random Allocation Logic
-  const addPerson = (name: string, target?: number) => {
+  const addPerson = (name: string, target?: number, dueDate?: string) => {
     if (!name.trim()) return;
     const defaultTarget =
       target && target > 0
@@ -494,6 +508,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       name: name.trim(),
       score: 0,
       target: defaultTarget,
+      dueDate: dueDate || settings.dueDate || getFutureDateStr(30),
       createdAt: Date.now(),
     };
     setPersons((prev) => [...prev, newPerson]);
@@ -566,6 +581,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updatePersonTarget = (id: string, target: number) => {
     setPersons((prev) =>
       prev.map((p) => (p.id === id ? { ...p, target: Math.max(1, target) } : p))
+    );
+  };
+
+  const updatePerson = (id: string, updates: Partial<PersonTarget>) => {
+    setPersons((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
     );
   };
 
@@ -727,6 +748,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         clearPerson,
         deletePerson,
         updatePersonTarget,
+        updatePerson,
         incrementMomentum,
         decrementMomentum,
         updateSettings,
