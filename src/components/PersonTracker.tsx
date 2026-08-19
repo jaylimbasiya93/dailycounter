@@ -294,9 +294,14 @@ export const PersonTracker: React.FC = () => {
             const personDaysRemaining = getDaysDifference(personDueDate, todayDateStr);
 
             // Live Expected Individual Daily Analytics
-            const personShare =
-              totalPersonTarget > 0 ? person.target / totalPersonTarget : 1 / persons.length;
-            const expectedIndividualDailyAvg = Math.round(activePace * personShare * 10) / 10;
+            const totalDays = Math.max(1, analytics.totalDaysLogged);
+            const actualPersonDailyPace = person.score / totalDays;
+            const equalSharePace = activePace / Math.max(1, persons.length);
+            const targetSharePace =
+              activePace * (totalPersonTarget > 0 ? person.target / totalPersonTarget : 1 / persons.length);
+
+            const expectedIndividualDailyAvg =
+              Math.round(Math.max(actualPersonDailyPace, equalSharePace, targetSharePace) * 10) / 10;
             const expectedIndividualScoreByDueDate =
               person.score + Math.round(expectedIndividualDailyAvg * personDaysRemaining);
             const requiredIndividualDailyPace = Math.max(
