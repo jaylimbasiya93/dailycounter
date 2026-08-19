@@ -1,9 +1,11 @@
 import type { MomentumEntry, AppSettings } from '../types';
+import { getFutureDateStr } from './date';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   valuePerMomentum: 50,
   dailyGoal: 50,
   lifetimeGoal: 251,
+  dueDate: getFutureDateStr(30),
   reminderTime: '20:00',
   theme: 'system',
   soundEnabled: true,

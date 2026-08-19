@@ -21,6 +21,10 @@ export const DashboardView: React.FC = () => {
     analytics,
     dayLogs,
     setActiveTab,
+    totalPersonTarget,
+    totalPersonScore,
+    daysRemainingToDueDate,
+    requiredDailyPace,
   } = useApp();
 
   const [ripplePlus, setRipplePlus] = useState(false);
@@ -49,11 +53,11 @@ export const DashboardView: React.FC = () => {
   const isGoalReached = todayCount >= settings.dailyGoal;
   const goalRemaining = Math.max(0, settings.dailyGoal - todayCount);
 
-  // Lifetime Goal calculations
-  const lifetimeGoal = settings.lifetimeGoal ?? 251;
-  const lifetimeRemaining = Math.max(0, lifetimeGoal - lifetimeCount);
-  const isLifetimeGoalAchieved = lifetimeCount >= lifetimeGoal;
-  const lifetimePercentage = Math.min(100, Math.round((lifetimeCount / lifetimeGoal) * 100));
+  // Total Goal (Combined Persons Goal) calculations
+  const effectiveGoal = totalPersonTarget;
+  const effectiveScore = totalPersonScore;
+  const isLifetimeGoalAchieved = effectiveScore >= effectiveGoal;
+  const lifetimePercentage = Math.min(100, Math.round((effectiveScore / Math.max(1, effectiveGoal)) * 100));
 
   // Determine realistic active daily pace based on actual logged days and current momentum
   const activeDaysLast7 = Math.max(1, dayLogs.slice(0, 7).length);
@@ -67,16 +71,6 @@ export const DashboardView: React.FC = () => {
     weeklyAverage,
     analytics.dailyAverage
   );
-
-  const daysToComplete = isLifetimeGoalAchieved ? 0 : Math.ceil(lifetimeRemaining / activePace);
-
-  const getEstimatedCompletionDate = (days: number) => {
-    if (isLifetimeGoalAchieved) return 'Goal Completed! 🎉';
-    if (days <= 0) return 'Today!';
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + days);
-    return targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
 
   return (
     <div className="pb-36 pt-2 px-4 max-w-md mx-auto space-y-6 select-none">
@@ -208,7 +202,7 @@ export const DashboardView: React.FC = () => {
       {/* Person Goal Allocation & Random Score Distribution (Below Daily Goal) */}
       <PersonTracker />
 
-      {/* 4. Lifetime Goal Circle Analytics Card */}
+      {/* 4. Total Person Goal & Due Date Analytics Card */}
       <motion.div
         whileHover={{ y: -2 }}
         className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white via-slate-50 to-purple-50/50 dark:from-zinc-900 dark:via-zinc-900 dark:to-purple-950/20 p-5 border border-purple-200/60 dark:border-purple-900/30 shadow-soft-md space-y-4"
@@ -224,26 +218,26 @@ export const DashboardView: React.FC = () => {
             </div>
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1">
-                Lifetime Goal Analytics <Sparkles className="w-3 h-3 text-purple-500" />
+                Total Person Goal & Due Date <Sparkles className="w-3 h-3 text-purple-500" />
               </h3>
-              <span className="text-[10px] text-slate-500 dark:text-zinc-400">Completion prediction based on current pace</span>
+              <span className="text-[10px] text-slate-500 dark:text-zinc-400">Combined score of all active persons</span>
             </div>
           </div>
 
           <button
             onClick={() => setActiveTab('settings')}
             className="px-2.5 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-extrabold text-xs border border-purple-500/20 transition"
-            title="Edit Lifetime Goal Target"
+            title="Edit Target Settings"
           >
-            Target: {lifetimeGoal}
+            Target: {effectiveGoal}
           </button>
         </div>
 
         {/* Main Circle Analytics Display */}
         <div className="relative z-10 flex flex-col items-center justify-center py-2">
           <ProgressRing
-            current={lifetimeCount}
-            goal={lifetimeGoal}
+            current={effectiveScore}
+            goal={effectiveGoal}
             size={145}
             strokeWidth={12}
             gradientColors={['#a855f7', '#6366f1']}
@@ -259,13 +253,13 @@ export const DashboardView: React.FC = () => {
               ) : (
                 <>
                   <span className="text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
-                    {daysToComplete}
+                    {daysRemainingToDueDate}
                   </span>
                   <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mt-0.5">
-                    {daysToComplete === 1 ? 'Day Left' : 'Days Left'}
+                    {daysRemainingToDueDate === 1 ? 'Day Left' : 'Days Left'}
                   </span>
                   <span className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">
-                    to reach {lifetimeGoal} score
+                    Due: {settings.dueDate || 'Not set'}
                   </span>
                 </>
               )}
@@ -281,7 +275,7 @@ export const DashboardView: React.FC = () => {
               Score Progress
             </span>
             <span className="text-xs font-bold text-slate-900 dark:text-white block">
-              {lifetimeCount} / {lifetimeGoal}
+              {effectiveScore} / {effectiveGoal}
             </span>
             <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 block mt-0.5">
               {lifetimePercentage}% done
@@ -301,16 +295,16 @@ export const DashboardView: React.FC = () => {
             </span>
           </div>
 
-          {/* Estimated Completion Date */}
+          {/* Required Daily Pace to hit Due Date */}
           <div className="p-2.5 rounded-2xl bg-white/70 dark:bg-zinc-950/60 border border-slate-200/60 dark:border-zinc-800">
             <span className="text-[10px] font-medium text-slate-400 dark:text-zinc-500 block mb-0.5">
-              Est. Completion
+              Req. Daily Pace
             </span>
             <span className="text-[11px] font-extrabold text-slate-900 dark:text-white block leading-tight">
-              {getEstimatedCompletionDate(daysToComplete)}
+              {requiredDailyPace} / day
             </span>
-            <span className="text-[10px] text-slate-400 dark:text-zinc-400 block mt-0.5">
-              {isLifetimeGoalAchieved ? 'Achieved' : 'Predicted'}
+            <span className="text-[10px] text-purple-600 dark:text-purple-400 block mt-0.5 font-semibold">
+              for Due Date
             </span>
           </div>
         </div>

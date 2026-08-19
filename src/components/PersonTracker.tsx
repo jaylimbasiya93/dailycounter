@@ -1,16 +1,46 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppDataContext';
-import { UserPlus, RotateCcw, Trash2, Edit2, Users, Shuffle, CheckCircle2, Sparkles, X } from 'lucide-react';
+import {
+  UserPlus,
+  RotateCcw,
+  Trash2,
+  Edit2,
+  Users,
+  Shuffle,
+  CheckCircle2,
+  Sparkles,
+  X,
+  Calendar,
+  TrendingUp,
+  Target,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getFutureDateStr } from '../utils/date';
 
 export const PersonTracker: React.FC = () => {
-  const { persons, addPerson, clearPerson, deletePerson, updatePersonTarget } = useApp();
+  const {
+    persons,
+    totalPersonTarget,
+    totalPersonScore,
+    daysRemainingToDueDate,
+    requiredDailyPace,
+    weeklyAverage,
+    analytics,
+    todayCount,
+    settings,
+    updateSettings,
+    addPerson,
+    clearPerson,
+    deletePerson,
+    updatePersonTarget,
+  } = useApp();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newTarget, setNewTarget] = useState<number | ''>(10);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTargetValue, setEditTargetValue] = useState<number>(10);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Status state for showing animated toast message when credits are redistributed
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -50,6 +80,14 @@ export const PersonTracker: React.FC = () => {
       updatePersonTarget(id, editTargetValue);
     }
     setEditingId(null);
+  };
+
+  // Determine active overall daily pace
+  const activePace = Math.max(1, todayCount, weeklyAverage, analytics.dailyAverage);
+
+  const handleQuickPresetDate = (days: number) => {
+    updateSettings({ dueDate: getFutureDateStr(days) });
+    setShowDatePicker(false);
   };
 
   return (
@@ -100,6 +138,94 @@ export const PersonTracker: React.FC = () => {
           <span>{isAdding ? 'Close' : '+ Add Person'}</span>
         </button>
       </div>
+
+      {/* Combined Persons Total Goal & Due Date Overview Banner */}
+      {persons.length > 0 && (
+        <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 text-white p-4 shadow-soft-md space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Target className="w-4 h-4 text-indigo-300" />
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-200 block leading-tight">
+                  Total Team Goal & Deadline
+                </span>
+                <span className="text-xs font-extrabold text-white">
+                  Score: {totalPersonScore} / {totalPersonTarget}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="flex items-center space-x-1.5 px-3 py-1 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold text-white transition"
+            >
+              <Calendar className="w-3.5 h-3.5 text-indigo-300" />
+              <span>{settings.dueDate ? settings.dueDate : 'Set Due Date'}</span>
+            </button>
+          </div>
+
+          {/* Quick Date Picker Form Drawer */}
+          <AnimatePresence>
+            {showDatePicker && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden p-3 rounded-2xl bg-indigo-950/90 border border-indigo-700/50 space-y-2 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-indigo-200">Select Target Goal Due Date:</span>
+                  <input
+                    type="date"
+                    value={settings.dueDate || ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        updateSettings({ dueDate: e.target.value });
+                      }
+                    }}
+                    className="px-2 py-1 rounded-xl bg-indigo-900 border border-indigo-600 text-white font-bold focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-1.5 pt-1">
+                  <span className="text-[10px] text-indigo-300">Quick Presets:</span>
+                  {[
+                    { label: '+7 Days', days: 7 },
+                    { label: '+30 Days', days: 30 },
+                    { label: '+90 Days', days: 90 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.days}
+                      onClick={() => handleQuickPresetDate(preset.days)}
+                      className="px-2 py-0.5 rounded-lg bg-indigo-800 hover:bg-indigo-700 text-indigo-100 text-[10px] font-bold border border-indigo-600/60"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Combined Progress & Days Remaining Stats */}
+          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-indigo-700/40 text-center">
+            <div className="p-2 rounded-2xl bg-white/10">
+              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Days Left</span>
+              <span className="text-xs font-black text-white block">{daysRemainingToDueDate} days</span>
+            </div>
+
+            <div className="p-2 rounded-2xl bg-white/10">
+              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Daily Pace</span>
+              <span className="text-xs font-black text-white block">{activePace} / day</span>
+            </div>
+
+            <div className="p-2 rounded-2xl bg-white/10">
+              <span className="text-[10px] font-medium text-indigo-200 block mb-0.5">Req. Daily Pace</span>
+              <span className="text-xs font-black text-amber-300 block">{requiredDailyPace} / day</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Person Inline Drawer / Form */}
       <AnimatePresence>
@@ -187,7 +313,7 @@ export const PersonTracker: React.FC = () => {
         </div>
       )}
 
-      {/* Person List Cards */}
+      {/* Person List Cards with Live Expected Analytics */}
       {persons.length > 0 && (
         <div className="space-y-2.5">
           {persons.map((person) => {
@@ -197,13 +323,28 @@ export const PersonTracker: React.FC = () => {
             );
             const isCompleted = person.score >= person.target;
 
+            // Live Expected Individual Daily Analytics
+            const personShare =
+              totalPersonTarget > 0 ? person.target / totalPersonTarget : 1 / persons.length;
+            const expectedIndividualDailyAvg = Math.round(activePace * personShare * 10) / 10;
+            const expectedIndividualScoreByDueDate =
+              person.score + Math.round(expectedIndividualDailyAvg * daysRemainingToDueDate);
+            const requiredIndividualDailyPace = Math.max(
+              0,
+              Math.round(
+                ((person.target - person.score) / Math.max(1, daysRemainingToDueDate)) * 10
+              ) / 10
+            );
+            const isOnTrack =
+              isCompleted || expectedIndividualScoreByDueDate >= person.target;
+
             return (
               <motion.div
                 key={person.id}
                 layout
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-3xl bg-white dark:bg-zinc-900 p-4 border border-slate-200/80 dark:border-zinc-800 shadow-soft-sm space-y-2.5"
+                className="rounded-3xl bg-white dark:bg-zinc-900 p-4 border border-slate-200/80 dark:border-zinc-800 shadow-soft-sm space-y-3"
               >
                 {/* Person Header (Left: Name & Target, Right: Clear & Options) */}
                 <div className="flex items-center justify-between">
@@ -318,6 +459,59 @@ export const PersonTracker: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {/* Live Expected Individual Analytics Breakdown Card */}
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-100 dark:border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-zinc-800/80 pb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3 text-indigo-500" /> Expected Individual Analytics
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                        isOnTrack
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                          : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                      }`}
+                    >
+                      {isOnTrack ? 'On Track 🎉' : `Needs +${requiredIndividualDailyPace}/day`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-center pt-0.5">
+                    {/* Expected Daily Pace */}
+                    <div className="p-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800">
+                      <span className="text-[9px] font-medium text-slate-400 dark:text-zinc-500 block mb-0.5">
+                        Exp. Daily Pace
+                      </span>
+                      <span className="text-xs font-extrabold text-slate-900 dark:text-white block">
+                        {expectedIndividualDailyAvg}
+                      </span>
+                      <span className="text-[9px] text-slate-400 block">counts/day</span>
+                    </div>
+
+                    {/* Expected Score by Due Date */}
+                    <div className="p-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800">
+                      <span className="text-[9px] font-medium text-slate-400 dark:text-zinc-500 block mb-0.5">
+                        Exp. Score on Due
+                      </span>
+                      <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block">
+                        {expectedIndividualScoreByDueDate}
+                      </span>
+                      <span className="text-[9px] text-slate-400 block">/ {person.target} target</span>
+                    </div>
+
+                    {/* Required Daily Pace */}
+                    <div className="p-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800">
+                      <span className="text-[9px] font-medium text-slate-400 dark:text-zinc-500 block mb-0.5">
+                        Req. Daily Pace
+                      </span>
+                      <span className="text-xs font-extrabold text-slate-900 dark:text-white block">
+                        {requiredIndividualDailyPace}
+                      </span>
+                      <span className="text-[9px] text-slate-400 block">counts/day</span>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             );
           })}
@@ -326,7 +520,7 @@ export const PersonTracker: React.FC = () => {
           <div className="p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 text-[11px] text-slate-600 dark:text-zinc-400 flex items-start space-x-2">
             <Shuffle className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
             <p className="leading-snug">
-              Counts from <span className="font-bold text-slate-900 dark:text-white">+</span> and <span className="font-bold text-slate-900 dark:text-white">-</span> are randomly assigned. Scores are total & persistent (not reset at day/month completion). Clearing redistributes credits randomly to remaining team members!
+              Counts from <span className="font-bold text-slate-900 dark:text-white">+</span> and <span className="font-bold text-slate-900 dark:text-white">-</span> are randomly assigned. Scores are total & persistent. Live expected individual daily stats automatically recalculate!
             </p>
           </div>
         </div>

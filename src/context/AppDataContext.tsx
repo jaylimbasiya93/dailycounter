@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { MomentumEntry, PersonTarget, AppSettings, TabType, DayLog, AnalyticsSummary, HourlyStat, WeekdayStat } from '../types';
 import { DEFAULT_SETTINGS, generateSeedEntries } from '../utils/mockData';
-import { getLocalDateStr } from '../utils/date';
+import { getLocalDateStr, getDaysDifference } from '../utils/date';
 import { soundEffects } from '../utils/audio';
 import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 import confetti from 'canvas-confetti';
@@ -22,6 +22,10 @@ interface AppContextType {
   dayLogs: DayLog[];
   analytics: AnalyticsSummary;
   persons: PersonTarget[];
+  totalPersonTarget: number;
+  totalPersonScore: number;
+  daysRemainingToDueDate: number;
+  requiredDailyPace: number;
   addPerson: (name: string, target?: number) => void;
   clearPerson: (id: string) => void;
   deletePerson: (id: string, redistribute?: boolean) => void;
@@ -191,6 +195,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const todayValue = useMemo(() => {
     return todayCount * settings.valuePerMomentum;
   }, [todayCount, settings.valuePerMomentum]);
+
+  // Combined Persons Totals & Due Date Calculations
+  const totalPersonTarget = useMemo(() => {
+    if (persons.length > 0) {
+      return persons.reduce((sum, p) => sum + p.target, 0);
+    }
+    return settings.lifetimeGoal ?? 251;
+  }, [persons, settings.lifetimeGoal]);
+
+  const totalPersonScore = useMemo(() => {
+    if (persons.length > 0) {
+      return persons.reduce((sum, p) => sum + p.score, 0);
+    }
+    return lifetimeCount;
+  }, [persons, lifetimeCount]);
+
+  const daysRemainingToDueDate = useMemo(() => {
+    if (!settings.dueDate) return 30;
+    return getDaysDifference(settings.dueDate, todayDateStr);
+  }, [settings.dueDate, todayDateStr]);
+
+  const requiredDailyPace = useMemo(() => {
+    const remaining = Math.max(0, totalPersonTarget - totalPersonScore);
+    if (remaining <= 0) return 0;
+    return Math.ceil(remaining / Math.max(1, daysRemainingToDueDate));
+  }, [totalPersonTarget, totalPersonScore, daysRemainingToDueDate]);
 
   // Streak computations
   const { currentStreak, longestStreak } = useMemo(() => {
@@ -689,6 +719,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         dayLogs,
         analytics,
         persons,
+        totalPersonTarget,
+        totalPersonScore,
+        daysRemainingToDueDate,
+        requiredDailyPace,
         addPerson,
         clearPerson,
         deletePerson,

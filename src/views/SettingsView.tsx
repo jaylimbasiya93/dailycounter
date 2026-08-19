@@ -13,7 +13,9 @@ import {
   User,
   ShieldAlert,
   Check,
+  Calendar,
 } from 'lucide-react';
+import { getFutureDateStr } from '../utils/date';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const SettingsView: React.FC = () => {
@@ -148,8 +150,43 @@ export const SettingsView: React.FC = () => {
             className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
           />
           <span className="text-[11px] text-slate-400 block mt-1">
-            Target total score. Analytics calculates estimated completion days based on current pace.
+            Target total score fallback when no individual person targets are set.
           </span>
+        </div>
+
+        {/* Target Goal Due Date */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-accent-500" /> Target Goal Due Date
+            </label>
+            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+              {settings.dueDate || 'Not Set'}
+            </span>
+          </div>
+          <input
+            type="date"
+            value={settings.dueDate || ''}
+            onChange={(e) => updateSettings({ dueDate: e.target.value })}
+            className="w-full px-3.5 py-2.5 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200/80 dark:border-zinc-800 text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500"
+          />
+          <div className="flex items-center space-x-1.5 pt-2">
+            <span className="text-[10px] text-slate-400">Quick Presets:</span>
+            {[
+              { label: '+7 Days', days: 7 },
+              { label: '+30 Days', days: 30 },
+              { label: '+90 Days', days: 90 },
+            ].map((preset) => (
+              <button
+                key={preset.days}
+                type="button"
+                onClick={() => updateSettings({ dueDate: getFutureDateStr(preset.days) })}
+                className="px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold border border-indigo-500/20"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Reminder Time */}
