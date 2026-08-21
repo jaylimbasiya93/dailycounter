@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppDataContext';
-import { getLocalDateStr } from '../utils/date';
+import { getLocalDateStr, getDaysFromStartDate } from '../utils/date';
 import {
   ResponsiveContainer,
   BarChart,
@@ -33,22 +33,34 @@ import {
 import { motion } from 'framer-motion';
 
 export const AnalyticsView: React.FC = () => {
-  const { dayLogs, analytics, settings, todayDateStr, weeklyAverage } = useApp();
+  const { dayLogs, entries, analytics, settings, todayDateStr, weeklyAverage } = useApp();
 
   type PeriodType = 'hourly_all' | 'hourly_today' | 'weekly' | 'monthly' | 'cumulative';
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hourly_all');
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<Date>(new Date());
   const [allTimeHourlyMode, setAllTimeHourlyMode] = useState<'avg' | 'total'>('avg');
 
+  // Track start/reset date (earliest entry date or todayDateStr)
+  const trackingStartDate = useMemo(() => {
+    if (!entries || entries.length === 0) return todayDateStr;
+    let earliest = entries[0].date;
+    for (let i = 1; i < entries.length; i++) {
+      if (entries[i].date < earliest) {
+        earliest = entries[i].date;
+      }
+    }
+    return earliest;
+  }, [entries, todayDateStr]);
+
+  // Live dynamic current daily pace
   const currentPace = useMemo(() => {
     const pace = Math.max(
       1,
       analytics.dailyAverage,
-      weeklyAverage,
-      settings.dailyGoal
+      weeklyAverage
     );
     return Math.round(pace * 10) / 10;
-  }, [analytics.dailyAverage, weeklyAverage, settings.dailyGoal]);
+  }, [analytics.dailyAverage, weeklyAverage]);
 
   // 1. All-time Hourly Average & Total Data (0..23 hours)
   const allTimeHourlyChartData = useMemo(() => {
@@ -619,10 +631,10 @@ export const AnalyticsView: React.FC = () => {
             <CalendarIcon className="w-4 h-4 text-accent-500" />
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                Monthly Calendar Log
+                Cumulative Pace Calendar
               </h3>
               <span className="text-[10px] text-slate-400 block font-medium">
-                Pace: <strong className="text-indigo-600 dark:text-indigo-400">{currentPace}</strong> cnts/day (₹{Math.round(currentPace * settings.valuePerMomentum)}/day)
+                Start Date: <strong className="text-slate-800 dark:text-zinc-200">{trackingStartDate}</strong> • Pace: <strong className="text-indigo-600 dark:text-indigo-400">{currentPace}</strong>/day (₹{Math.round(currentPace * settings.valuePerMomentum)}/day)
               </span>
             </div>
           </div>
@@ -656,43 +668,61 @@ export const AnalyticsView: React.FC = () => {
           ))}
         </div>
 
-        {/* Calendar Grid with Value & Amount below date based on pace */}
+        {/* Calendar Grid: Cumulative totals from start date based on current pace */}
         <div className="grid grid-cols-7 gap-1 text-center text-xs">
           {calendarDays.map((item, idx) => {
-            if (!item.day) {
-              return <div key={idx} className="h-14" />;
+            if (!item.day || !item.date) {
+              return <div key={idx} className="h-16" />;
             }
 
             const isToday = item.date === todayDateStr;
             const hasActivity = item.count > 0;
-            const hitGoal = item.count >= settings.dailyGoal;
+            const dayIndex = getDaysFromStartDate(trackingStartDate, item.date);
+            const isBeforeStart = dayIndex === 0;
 
-            const displayValue = hasActivity ? item.count : Math.round(currentPace);
-            const displayAmount = displayValue * settings.valuePerMomentum;
+            // Cumulative totals from start date based on live current pace:
+            // 1st Day (N=1): currentPace * 1 (Count), currentPace * 1 * valuePerMomentum (Amount)
+            // 2nd Day (N=2): currentPace * 2 (Count), currentPace * 2 * valuePerMomentum (Amount)
+            // ... Nth Day (N): currentPace * N (Count), currentPace * N * valuePerMomentum (Amount)
+            const expectedPaceCount = isBeforeStart ? 0 : Math.round(currentPace * dayIndex);
+            const expectedPaceAmount = isBeforeStart ? 0 : Math.round(currentPace * dayIndex * settings.valuePerMomentum);
 
             return (
               <div
                 key={idx}
-                className={`py-1.5 px-0.5 min-h-[54px] rounded-xl flex flex-col items-center justify-between transition-all border ${
+                className={`py-1.5 px-0.5 min-h-[60px] rounded-xl flex flex-col items-center justify-between transition-all border ${
                   isToday
                     ? 'ring-2 ring-indigo-500 bg-indigo-500/10 border-indigo-500/40 font-bold'
-                    : hitGoal
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                    : isBeforeStart
+                    ? 'bg-slate-50/40 dark:bg-zinc-950/40 border-slate-100 dark:border-zinc-900 text-slate-400 dark:text-zinc-600'
                     : hasActivity
-                    ? 'bg-slate-100 dark:bg-zinc-800/80 border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
-                    : 'bg-slate-50/60 dark:bg-zinc-950/60 border-slate-100 dark:border-zinc-800/50 text-slate-500 dark:text-zinc-400'
+                    ? 'bg-indigo-50/80 dark:bg-zinc-800/90 border-indigo-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
+                    : 'bg-slate-50/80 dark:bg-zinc-900/60 border-slate-100 dark:border-zinc-800/80 text-slate-700 dark:text-zinc-300'
                 }`}
               >
-                <span className="text-[11px] font-black leading-none">{item.day}</span>
+                <div className="flex items-center justify-between w-full px-1">
+                  <span className="text-[11px] font-black leading-none">{item.day}</span>
+                  {!isBeforeStart && (
+                    <span className="text-[8px] font-bold text-slate-400 dark:text-zinc-500">
+                      D{dayIndex}
+                    </span>
+                  )}
+                </div>
                 
-                {/* 2 Things below date: 1. Value (Count), 2. Amount (₹) */}
-                <div className="flex flex-col items-center leading-tight mt-0.5">
-                  <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-300">
-                    {displayValue} val
-                  </span>
-                  <span className="text-[8.5px] font-bold text-emerald-600 dark:text-emerald-400">
-                    ₹{displayAmount}
-                  </span>
+                {/* 2 Things below date calculated from start date: 1. Cumulative Value (Count), 2. Cumulative Amount (₹) */}
+                <div className="flex flex-col items-center leading-tight mt-0.5 w-full">
+                  {!isBeforeStart ? (
+                    <>
+                      <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-300">
+                        {expectedPaceCount} val
+                      </span>
+                      <span className="text-[8.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                        ₹{expectedPaceAmount}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-[9px] text-slate-300 dark:text-zinc-700">-</span>
+                  )}
                 </div>
               </div>
             );

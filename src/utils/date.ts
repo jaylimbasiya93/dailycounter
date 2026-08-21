@@ -45,4 +45,24 @@ export function getDueDateTimestamp(dueDateStr?: string): number {
   return Infinity;
 }
 
+export function getDaysFromStartDate(startDateStr: string, targetDateStr: string): number {
+  try {
+    const sParts = startDateStr.split('-').map(Number);
+    const tParts = targetDateStr.split('-').map(Number);
+    if (sParts.length !== 3 || tParts.length !== 3) return 0;
+
+    const sDate = new Date(sParts[0], sParts[1] - 1, sParts[2]);
+    const tDate = new Date(tParts[0], tParts[1] - 1, tParts[2]);
+
+    const diffMs = tDate.getTime() - sDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 0;
+    return diffDays + 1;
+  } catch {
+    return 0;
+  }
+}
+
+
 
