@@ -33,12 +33,22 @@ import {
 import { motion } from 'framer-motion';
 
 export const AnalyticsView: React.FC = () => {
-  const { dayLogs, analytics, settings, todayDateStr } = useApp();
+  const { dayLogs, analytics, settings, todayDateStr, weeklyAverage } = useApp();
 
   type PeriodType = 'hourly_all' | 'hourly_today' | 'weekly' | 'monthly' | 'cumulative';
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hourly_all');
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<Date>(new Date());
   const [allTimeHourlyMode, setAllTimeHourlyMode] = useState<'avg' | 'total'>('avg');
+
+  const currentPace = useMemo(() => {
+    const pace = Math.max(
+      1,
+      analytics.dailyAverage,
+      weeklyAverage,
+      settings.dailyGoal
+    );
+    return Math.round(pace * 10) / 10;
+  }, [analytics.dailyAverage, weeklyAverage, settings.dailyGoal]);
 
   // 1. All-time Hourly Average & Total Data (0..23 hours)
   const allTimeHourlyChartData = useMemo(() => {
@@ -607,9 +617,14 @@ export const AnalyticsView: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <CalendarIcon className="w-4 h-4 text-accent-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-              Monthly Calendar Log
-            </h3>
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                Monthly Calendar Log
+              </h3>
+              <span className="text-[10px] text-slate-400 block font-medium">
+                Pace: <strong className="text-indigo-600 dark:text-indigo-400">{currentPace}</strong> cnts/day (₹{Math.round(currentPace * settings.valuePerMomentum)}/day)
+              </span>
+            </div>
           </div>
           <div className="flex items-center space-x-1">
             <button
@@ -641,34 +656,44 @@ export const AnalyticsView: React.FC = () => {
           ))}
         </div>
 
-        {/* Calendar Grid */}
+        {/* Calendar Grid with Value & Amount below date based on pace */}
         <div className="grid grid-cols-7 gap-1 text-center text-xs">
           {calendarDays.map((item, idx) => {
             if (!item.day) {
-              return <div key={idx} className="h-8" />;
+              return <div key={idx} className="h-14" />;
             }
 
             const isToday = item.date === todayDateStr;
             const hasActivity = item.count > 0;
             const hitGoal = item.count >= settings.dailyGoal;
 
+            const displayValue = hasActivity ? item.count : Math.round(currentPace);
+            const displayAmount = displayValue * settings.valuePerMomentum;
+
             return (
               <div
                 key={idx}
-                className={`h-8 rounded-xl flex flex-col items-center justify-center transition-all ${
+                className={`py-1.5 px-0.5 min-h-[54px] rounded-xl flex flex-col items-center justify-between transition-all border ${
                   isToday
-                    ? 'ring-2 ring-accent-500 font-bold'
+                    ? 'ring-2 ring-indigo-500 bg-indigo-500/10 border-indigo-500/40 font-bold'
                     : hitGoal
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                     : hasActivity
-                    ? 'bg-slate-100 dark:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
-                    : 'text-slate-400 dark:text-zinc-600'
+                    ? 'bg-slate-100 dark:bg-zinc-800/80 border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-200'
+                    : 'bg-slate-50/60 dark:bg-zinc-950/60 border-slate-100 dark:border-zinc-800/50 text-slate-500 dark:text-zinc-400'
                 }`}
               >
-                <span>{item.day}</span>
-                {hasActivity && (
-                  <span className="w-1 h-1 rounded-full bg-accent-500 -mt-0.5" />
-                )}
+                <span className="text-[11px] font-black leading-none">{item.day}</span>
+                
+                {/* 2 Things below date: 1. Value (Count), 2. Amount (₹) */}
+                <div className="flex flex-col items-center leading-tight mt-0.5">
+                  <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-300">
+                    {displayValue} val
+                  </span>
+                  <span className="text-[8.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                    ₹{displayAmount}
+                  </span>
+                </div>
               </div>
             );
           })}

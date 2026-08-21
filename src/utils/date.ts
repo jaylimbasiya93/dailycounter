@@ -30,3 +30,19 @@ export function getDaysDifference(targetDateStr: string, fromDateStr: string = g
   }
 }
 
+export function getDueDateTimestamp(dueDateStr?: string): number {
+  if (!dueDateStr) return Infinity;
+  try {
+    const parts = dueDateStr.split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      return new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+    }
+    const parsed = Date.parse(dueDateStr);
+    if (!isNaN(parsed)) return parsed;
+  } catch {
+    // fallback
+  }
+  return Infinity;
+}
+
+

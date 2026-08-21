@@ -1,9 +1,9 @@
-import type { MomentumEntry, AppSettings } from '../types';
+import type { MomentumEntry, AppSettings, PersonTarget } from '../types';
 import { getFutureDateStr } from './date';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   valuePerMomentum: 50,
-  dailyGoal: 50,
+  dailyGoal: 7,
   lifetimeGoal: 251,
   dueDate: getFutureDateStr(30),
   reminderTime: '20:00',
@@ -12,6 +12,34 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hapticsEnabled: true,
   userName: 'Jay',
 };
+
+export const DEFAULT_PERSONS: PersonTarget[] = [
+  {
+    id: 'person-pa',
+    name: 'pa',
+    score: 0,
+    target: 200,
+    dueDate: '2026-09-10',
+    createdAt: 1700000000000,
+  },
+  {
+    id: 'person-ja',
+    name: 'ja',
+    score: 0,
+    target: 300,
+    dueDate: '2026-09-30',
+    createdAt: 1700000000001,
+  },
+  {
+    id: 'person-hi',
+    name: 'hi',
+    score: 0,
+    target: 300,
+    dueDate: '2026-08-18',
+    createdAt: 1700000000002,
+  },
+];
+
 
 // Generate 60 days of realistic historical seed data
 export function generateSeedEntries(): MomentumEntry[] {

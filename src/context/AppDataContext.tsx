@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { MomentumEntry, PersonTarget, AppSettings, TabType, DayLog, AnalyticsSummary, HourlyStat, WeekdayStat } from '../types';
-import { DEFAULT_SETTINGS, generateSeedEntries } from '../utils/mockData';
-import { getLocalDateStr, getDaysDifference, getFutureDateStr } from '../utils/date';
+import { DEFAULT_SETTINGS, DEFAULT_PERSONS, generateSeedEntries } from '../utils/mockData';
+import { getLocalDateStr, getDaysDifference, getFutureDateStr, getDueDateTimestamp } from '../utils/date';
 import { soundEffects } from '../utils/audio';
 import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 import confetti from 'canvas-confetti';
@@ -80,12 +80,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_PERSONS_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch {
       // Fallback
     }
-    return [];
+    return DEFAULT_PERSONS;
   });
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -602,12 +605,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setEntries((prev) => [newEntry, ...prev]);
 
-    // Randomly allocate score to 1 person
+    // Allocate score to person whose due date is nearest
     setPersons((prevPersons) => {
       if (prevPersons.length === 0) return prevPersons;
-      const randIdx = Math.floor(Math.random() * prevPersons.length);
-      return prevPersons.map((p, idx) =>
-        idx === randIdx ? { ...p, score: p.score + amount } : p
+
+      let targetPerson = prevPersons[0];
+      let minTime = getDueDateTimestamp(targetPerson.dueDate);
+
+      for (let i = 1; i < prevPersons.length; i++) {
+        const p = prevPersons[i];
+        const pTime = getDueDateTimestamp(p.dueDate);
+        if (pTime < minTime) {
+          minTime = pTime;
+          targetPerson = p;
+        }
+      }
+
+      return prevPersons.map((p) =>
+        p.id === targetPerson.id ? { ...p, score: p.score + amount } : p
       );
     });
 
@@ -634,14 +649,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setEntries((prev) => [newEntry, ...prev]);
 
-    // Randomly subtract score from 1 person
+    // Subtract score from person whose due date is nearest
     setPersons((prevPersons) => {
       if (prevPersons.length === 0) return prevPersons;
+
       const personsWithScore = prevPersons.filter((p) => p.score > 0);
       const candidates = personsWithScore.length > 0 ? personsWithScore : prevPersons;
-      const selected = candidates[Math.floor(Math.random() * candidates.length)];
+
+      let targetPerson = candidates[0];
+      let minTime = getDueDateTimestamp(targetPerson.dueDate);
+
+      for (let i = 1; i < candidates.length; i++) {
+        const p = candidates[i];
+        const pTime = getDueDateTimestamp(p.dueDate);
+        if (pTime < minTime) {
+          minTime = pTime;
+          targetPerson = p;
+        }
+      }
+
       return prevPersons.map((p) =>
-        p.id === selected.id ? { ...p, score: Math.max(0, p.score - amount) } : p
+        p.id === targetPerson.id ? { ...p, score: Math.max(0, p.score - amount) } : p
       );
     });
 
@@ -711,7 +739,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const resetData = () => {
     setEntries([]);
-    setPersons([]);
+    setPersons(DEFAULT_PERSONS);
     setSettings(DEFAULT_SETTINGS);
     localStorage.removeItem(LOCAL_STORAGE_ENTRIES_KEY);
     localStorage.removeItem(LOCAL_STORAGE_SETTINGS_KEY);
