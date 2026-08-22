@@ -33,12 +33,26 @@ import {
 import { motion } from 'framer-motion';
 
 export const AnalyticsView: React.FC = () => {
-  const { dayLogs, entries, analytics, settings, todayDateStr, weeklyAverage } = useApp();
+  const { dayLogs, entries, persons, analytics, settings, todayDateStr, weeklyAverage } = useApp();
 
   type PeriodType = 'hourly_all' | 'hourly_today' | 'weekly' | 'monthly' | 'cumulative';
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('hourly_all');
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<Date>(new Date());
   const [allTimeHourlyMode, setAllTimeHourlyMode] = useState<'avg' | 'total'>('avg');
+
+  // Map person due dates YYYY-MM-DD -> list of person names
+  const dueDatesMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    if (persons && persons.length > 0) {
+      persons.forEach((p) => {
+        if (p.dueDate) {
+          if (!map[p.dueDate]) map[p.dueDate] = [];
+          map[p.dueDate].push(p.name);
+        }
+      });
+    }
+    return map;
+  }, [persons]);
 
   // Track start/reset date (earliest entry date or todayDateStr)
   const trackingStartDate = useMemo(() => {
@@ -661,6 +675,18 @@ export const AnalyticsView: React.FC = () => {
           </div>
         </div>
 
+        {/* Person Due Date & Today Legend Banner */}
+        {persons.length > 0 && (
+          <div className="flex items-center space-x-3 text-[10px] px-1 py-0.5 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-100 dark:border-zinc-800">
+            <span className="flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400">
+              <span className="w-2.5 h-2.5 rounded-sm bg-amber-500" /> Person Goal Due Date
+            </span>
+            <span className="flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400">
+              <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500" /> Today
+            </span>
+          </div>
+        )}
+
         {/* Days Header */}
         <div className="grid grid-cols-7 text-center text-[10px] font-semibold text-slate-400">
           {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
@@ -668,7 +694,7 @@ export const AnalyticsView: React.FC = () => {
           ))}
         </div>
 
-        {/* Calendar Grid: Cumulative totals from start date based on current pace */}
+        {/* Calendar Grid: Cumulative totals & Person Due Date Highlights */}
         <div className="grid grid-cols-7 gap-1 text-center text-xs">
           {calendarDays.map((item, idx) => {
             if (!item.day || !item.date) {
@@ -680,10 +706,10 @@ export const AnalyticsView: React.FC = () => {
             const dayIndex = getDaysFromStartDate(trackingStartDate, item.date);
             const isBeforeStart = dayIndex === 0;
 
+            const duePersons = item.date ? dueDatesMap[item.date] : undefined;
+            const isDueDate = duePersons && duePersons.length > 0;
+
             // Cumulative totals from start date based on live current pace:
-            // 1st Day (N=1): currentPace * 1 (Count), currentPace * 1 * valuePerMomentum (Amount)
-            // 2nd Day (N=2): currentPace * 2 (Count), currentPace * 2 * valuePerMomentum (Amount)
-            // ... Nth Day (N): currentPace * N (Count), currentPace * N * valuePerMomentum (Amount)
             const expectedPaceCount = isBeforeStart ? 0 : Math.round(currentPace * dayIndex);
             const expectedPaceAmount = isBeforeStart ? 0 : Math.round(currentPace * dayIndex * settings.valuePerMomentum);
 
@@ -691,7 +717,11 @@ export const AnalyticsView: React.FC = () => {
               <div
                 key={idx}
                 className={`py-1.5 px-0.5 min-h-[60px] rounded-xl flex flex-col items-center justify-between transition-all border ${
-                  isToday
+                  isDueDate && isToday
+                    ? 'ring-2 ring-indigo-500 bg-amber-500/25 border-2 border-amber-500 text-amber-950 dark:text-amber-100 font-bold shadow-soft-sm'
+                    : isDueDate
+                    ? 'bg-amber-500/20 dark:bg-amber-950/80 border-2 border-amber-500 text-amber-950 dark:text-amber-100 shadow-soft-sm font-bold'
+                    : isToday
                     ? 'ring-2 ring-indigo-500 bg-indigo-500/10 border-indigo-500/40 font-bold'
                     : isBeforeStart
                     ? 'bg-slate-50/40 dark:bg-zinc-950/40 border-slate-100 dark:border-zinc-900 text-slate-400 dark:text-zinc-600'
@@ -702,18 +732,25 @@ export const AnalyticsView: React.FC = () => {
               >
                 <div className="flex items-center justify-between w-full px-1">
                   <span className="text-[11px] font-black leading-none">{item.day}</span>
-                  {!isBeforeStart && (
+                  {isDueDate ? (
+                    <span
+                      className="text-[7.5px] font-black px-1 py-0.2 rounded bg-amber-500 text-white truncate max-w-[34px]"
+                      title={`Due Date: ${duePersons.join(', ')}`}
+                    >
+                      {duePersons.join(',')}
+                    </span>
+                  ) : !isBeforeStart ? (
                     <span className="text-[8px] font-bold text-slate-400 dark:text-zinc-500">
                       D{dayIndex}
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 
                 {/* 2 Things below date calculated from start date: 1. Cumulative Value (Count), 2. Cumulative Amount (₹) */}
                 <div className="flex flex-col items-center leading-tight mt-0.5 w-full">
                   {!isBeforeStart ? (
                     <>
-                      <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-300">
+                      <span className={`text-[9px] font-extrabold ${isDueDate ? 'text-amber-800 dark:text-amber-300' : 'text-indigo-600 dark:text-indigo-300'}`}>
                         {expectedPaceCount} val
                       </span>
                       <span className="text-[8.5px] font-bold text-emerald-600 dark:text-emerald-400">
